@@ -227,10 +227,16 @@ void nss_phy_tstamp_rx_buf(__attribute__((unused))void *app_data, struct sk_buff
 	 * set to the correct PTP class value by calling ptp_classify_raw
 	 * in drv->rxtstamp function.
 	 */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 6, 0))
 	if (ndev && ndev->phydev && ndev->phydev->drv &&
 			ndev->phydev->drv->rxtstamp)
 		if(ndev->phydev->drv->rxtstamp(ndev->phydev, skb, 0))
 			return;
+#else
+	if (ndev && phy_has_rxtstamp(ndev->phydev))
+		if (phy_rxtstamp(ndev->phydev, skb, 0))
+			return;
+#endif
 
 	netif_receive_skb(skb);
 }
@@ -248,9 +254,14 @@ void nss_phy_tstamp_tx_buf(struct net_device *ndev, struct sk_buff *skb)
 	 * set to the correct PTP class value by calling ptp_classify_raw
 	 * in the drv->txtstamp function.
 	 */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 6, 0))
 	if (ndev && ndev->phydev && ndev->phydev->drv &&
 			ndev->phydev->drv->txtstamp)
 		ndev->phydev->drv->txtstamp(ndev->phydev, skb, 0);
+#else
+	if (ndev && phy_has_txtstamp(ndev->phydev))
+		phy_txtstamp(ndev->phydev, skb, 0);
+#endif
 }
 EXPORT_SYMBOL(nss_phy_tstamp_tx_buf);
 
