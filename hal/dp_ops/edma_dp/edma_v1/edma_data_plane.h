@@ -26,7 +26,6 @@
 #define EDMA_RX_PREHDR_SIZE		(sizeof(struct edma_rx_preheader))
 #define EDMA_TX_PREHDR_SIZE		(sizeof(struct edma_tx_preheader))
 #define EDMA_RING_SIZE			128
-#define EDMA_NAPI_WORK			100
 #define EDMA_START_GMACS		NSS_DP_HAL_START_IFNUM
 #define EDMA_MAX_GMACS			NSS_DP_HAL_MAX_PORTS
 #define EDMA_TX_PKT_MIN_SIZE		33	/* IPQ807x EDMA needs a minimum packet size of 33 bytes */

@@ -845,7 +845,7 @@ static int edma_register_netdevice(struct net_device *netdev, uint32_t macid)
 	 */
 	if (!edma_hw.napi_added) {
 		netif_napi_add(netdev, &edma_hw.napi, edma_napi,
-				EDMA_NAPI_WORK);
+				NAPI_POLL_WEIGHT);
 		/*
 		 * Register the interrupt handlers and enable interrupts
 		 */
