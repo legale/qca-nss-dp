@@ -459,12 +459,12 @@ int edma_napi(struct napi_struct *napi, int budget)
 
 	for (i = 0; i < ehw->txcmpl_rings; i++) {
 		txcmpl_ring = &ehw->txcmpl_ring[i];
-		work_done += edma_clean_tx(ehw, txcmpl_ring);
+		edma_clean_tx(ehw, txcmpl_ring);
 	}
 
 	for (i = 0; i < ehw->rxfill_rings; i++) {
 		rxfill_ring = &ehw->rxfill_ring[i];
-		work_done += edma_alloc_rx_buffer(ehw, rxfill_ring);
+		edma_alloc_rx_buffer(ehw, rxfill_ring);
 	}
 
 	/*
