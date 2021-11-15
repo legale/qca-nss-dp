@@ -150,32 +150,6 @@
 #define EDMA_RX_RING_ID_QUEUE3_SET(x)	(((x) << EDMA_RX_RING_ID_QUEUE3_SHIFT) & EDMA_RX_RING_ID_QUEUE3_MASK)
 
 /*
- * PPE Hash seed and mask for configuring RPS hash map table
- */
-#define PPE_HASH_SEED_DEFAULT		0xabbcdefa
-#define PPE_HASH_MASK			0xfff
-#define PPE_HASH_MIX_V4_SIP		0x13
-#define PPE_HASH_MIX_V4_DIP		0xb
-#define PPE_HASH_MIX_V4_PROTO		0x13
-#define PPE_HASH_MIX_V4_DPORT		0xb
-#define PPE_HASH_MIX_V4_SPORT		0x13
-
-#define PPE_HASH_FIN_INNER_OUTER_0	0x205
-#define PPE_HASH_FIN_INNER_OUTER_1	0x264
-#define PPE_HASH_FIN_INNER_OUTER_2	0x227
-#define PPE_HASH_FIN_INNER_OUTER_3	0x245
-#define PPE_HASH_FIN_INNER_OUTER_4	0x201
-
-#define PPE_HASH_SIPV6_MIX_0		0x13
-#define PPE_HASH_SIPV6_MIX_1		0xb
-#define PPE_HASH_SIPV6_MIX_2		0x13
-#define PPE_HASH_SIPV6_MIX_3		0xb
-#define PPE_HASH_DIPV6_MIX_0		0x13
-#define PPE_HASH_DIPV6_MIX_1		0xb
-#define PPE_HASH_DIPV6_MIX_2		0x13
-#define PPE_HASH_DIPV6_MIX_3		0xb
-
-/*
  * EDMA_REG_PORT_CTRL register
  */
 #define EDMA_PORT_PAD_EN			0x1

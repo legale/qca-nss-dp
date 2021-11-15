@@ -60,7 +60,7 @@ qca-nss-dp-objs += hal/dp_ops/edma_dp/edma_v2/edma.o \
 		   hal/gmac_ops/syn/xgmac/syn_if.o
 NSS_DP_INCLUDE += -I$(obj)/hal/dp_ops/edma_dp/edma_v2
 NSS_DP_INCLUDE += -I$(obj)/hal/dp_ops/edma_dp/edma_v2/include
-ccflags-y += -DNSS_DP_IPQ95XX -DNSS_DP_PPE_SUPPORT -DNSS_DP_ENABLE_NAPI_GRO
+ccflags-y += -DNSS_DP_IPQ95XX -DNSS_DP_ENABLE_NAPI_GRO
 endif
 
 ccflags-y += $(NSS_DP_INCLUDE)

@@ -17,6 +17,7 @@
  */
 
 #include <fal/fal_vsi.h>
+#include <ppe_drv_public.h>
 #include "edma.h"
 #include "edma_cfg_tx.h"
 #include "edma_cfg_rx.h"
@@ -101,6 +102,14 @@ static int edma_dp_link_state(struct nss_dp_data_plane_ctx *dpc,
  */
 static int edma_dp_mac_addr(struct nss_dp_data_plane_ctx *dpc, uint8_t *addr)
 {
+	struct ppe_drv_iface *iface = ppe_drv_iface_get_by_dev(dpc->dev);
+	if (!iface) {
+		netdev_dbg(dpc->dev, "cannot get iface for corresponding netdev:%p\n", dpc->dev);
+		return NSS_DP_SUCCESS;
+	}
+
+	ppe_drv_iface_mac_addr_set(iface, addr);
+
 	return NSS_DP_SUCCESS;
 }
 
@@ -110,6 +119,14 @@ static int edma_dp_mac_addr(struct nss_dp_data_plane_ctx *dpc, uint8_t *addr)
  */
 static int edma_dp_change_mtu(struct nss_dp_data_plane_ctx *dpc, uint32_t mtu)
 {
+	struct ppe_drv_iface *iface = ppe_drv_iface_get_by_dev(dpc->dev);
+	if (!iface) {
+		netdev_dbg(dpc->dev, "cannot get iface for corresponding netdev:%p\n", dpc->dev);
+		return NSS_DP_SUCCESS;
+	}
+
+	ppe_drv_iface_mtu_set(iface, mtu);
+
 	return NSS_DP_SUCCESS;
 }
 
@@ -254,6 +271,7 @@ static int edma_dp_deinit(struct nss_dp_data_plane_ctx *dpc)
 {
 	struct net_device *netdev = dpc->dev;
 	struct nss_dp_dev *dp_dev = (struct nss_dp_dev *)netdev_priv(netdev);
+	struct ppe_drv_iface *iface;
 
 	free_percpu(dp_dev->dp_info.pcpu_stats.rx_stats);
 	free_percpu(dp_dev->dp_info.pcpu_stats.tx_stats);
@@ -267,6 +285,18 @@ static int edma_dp_deinit(struct nss_dp_data_plane_ctx *dpc)
 	} else {
 		edma_gbl_ctx.dp_override_cnt++;
 	}
+
+	/*
+	 * Deinitialize PPE port
+	 */
+	iface = ppe_drv_iface_get_by_dev(netdev);
+	if (!iface) {
+		netdev_dbg(dpc->dev, "cannot get iface for corresponding netdev:%p\n", dpc->dev);
+		return NSS_DP_SUCCESS;
+	}
+
+	ppe_drv_dp_deinit(iface);
+	ppe_drv_iface_deref(iface);
 
 	return NSS_DP_SUCCESS;
 }
@@ -332,6 +362,7 @@ static int edma_dp_init(struct nss_dp_data_plane_ctx *dpc)
 	struct net_device *netdev = dpc->dev;
 	struct nss_dp_dev *dp_dev = (struct nss_dp_dev *)netdev_priv(netdev);
 	int ret = 0;
+	struct ppe_drv_iface *iface = NULL;
 
 	/*
 	 * Allocate per-cpu stats memory
@@ -358,8 +389,33 @@ static int edma_dp_init(struct nss_dp_data_plane_ctx *dpc)
 	 */
 	ret = edma_dp_configure(netdev, dp_dev->macid);
 	if (ret) {
-		netdev_dbg(netdev, "Error configuring the data plane %s\n",
+		netdev_err(netdev, "Error configuring the data plane %s\n",
 				netdev->name);
+		free_percpu(dp_dev->dp_info.pcpu_stats.rx_stats);
+		free_percpu(dp_dev->dp_info.pcpu_stats.tx_stats);
+		return NSS_DP_FAILURE;
+	}
+
+	/*
+	 * Allocate PPE interface global object which will hold various information
+	 * about the port allocated in a single global structure.
+	 */
+	iface = ppe_drv_iface_alloc(PPE_DRV_IFACE_TYPE_PHYSICAL, netdev);
+	if (!iface) {
+		netdev_err(netdev, "Error allocating PPE interface for dev(%p) dev-name %s\n",
+				netdev, netdev->name);
+		free_percpu(dp_dev->dp_info.pcpu_stats.rx_stats);
+		free_percpu(dp_dev->dp_info.pcpu_stats.tx_stats);
+		return NSS_DP_FAILURE;
+	}
+
+	/*
+	 * Initialize port allocated in PPE
+	 */
+	if (ppe_drv_dp_init(iface, dp_dev->macid) != PPE_DRV_RET_SUCCESS) {
+		netdev_err(netdev, "Error allocating PPE interface for dev(%p) dev-name %s\n",
+				netdev, netdev->name);
+		ppe_drv_iface_deref(iface);
 		free_percpu(dp_dev->dp_info.pcpu_stats.rx_stats);
 		free_percpu(dp_dev->dp_info.pcpu_stats.tx_stats);
 		return NSS_DP_FAILURE;

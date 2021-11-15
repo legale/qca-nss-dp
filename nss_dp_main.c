@@ -997,13 +997,17 @@ int __init nss_dp_init(void)
 	dp_global_ctx.rx_buf_size = NSS_DP_RX_BUFFER_SIZE;
 
 	/*
-	 * Get the module params.
-	 * We do not support page_mode or jumbo_mru on low memory profiles.
+	 * Configure tx requeue functionality based on module param
 	 */
 	dp_global_ctx.tx_requeue_stop = false;
 	if (tx_requeue_stop != 0) {
 		dp_global_ctx.tx_requeue_stop = true;
 	}
+
+	/*
+	 * Get the module params.
+	 * We do not support page_mode or jumbo_mru on low memory profiles.
+	 */
 #if !defined(NSS_DP_MEM_PROFILE_LOW) && !defined(NSS_DP_MEM_PROFILE_MEDIUM)
 	dp_global_ctx.overwrite_mode = overwrite_mode;
 	dp_global_ctx.page_mode = page_mode;
