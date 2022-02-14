@@ -111,9 +111,7 @@ int edma_rx_alloc_buffer(struct edma_rxfill_ring *rxfill_ring, int alloc_count)
 		 */
 		EDMA_RXFILL_PACKET_LEN_SET(
 			rxfill_desc,
-			cpu_to_le32((uint32_t)
-			(buf_len)
-			& EDMA_RXFILL_BUF_SIZE_MASK));
+			(uint32_t)(buf_len) & EDMA_RXFILL_BUF_SIZE_MASK);
 
 		/*
 		 * Invalidate skb->data

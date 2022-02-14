@@ -245,10 +245,11 @@ static uint32_t edma_tx_skb_nr_frags(struct edma_txdesc_ring *txdesc_ring, struc
 		 * Note: We will flush this descriptor as well later.
 		 */
 		EDMA_TXDESC_MORE_BIT_SET(txd, 1);
+		EDMA_TXDESC_ENDIAN_SET(txd);
 
 		txd = EDMA_TXDESC_PRI_DESC(txdesc_ring, *hw_next_to_use);
 		edma_tx_desc_init(txd);
-		txd->word0 = (dma_addr_t)virt_to_phys(skb_frag_address(frag));
+		EDMA_TXDESC_BUFFER_ADDR_SET(txd, (dma_addr_t)virt_to_phys(skb_frag_address(frag)));
 		dmac_clean_range_no_dsb((void *)skb_frag_address(frag),
 				(void *)(skb_frag_address(frag) + buf_len));
 
@@ -257,6 +258,8 @@ static uint32_t edma_tx_skb_nr_frags(struct edma_txdesc_ring *txdesc_ring, struc
 		*hw_next_to_use = ((*hw_next_to_use + 1) & EDMA_TX_RING_SIZE_MASK);
 		i++;
 	}
+
+	EDMA_TXDESC_ENDIAN_SET(txd);
 
 	/*
 	 * This will be the index previous to that of current *hw_next_to_use
@@ -303,7 +306,7 @@ static struct edma_pri_txdesc *edma_tx_skb_first_desc(struct nss_dp_dev *dp_dev,
 	/*
 	 * Set the data pointer as the buffer address in the descriptor.
 	 */
-	txd->word0 = (dma_addr_t)virt_to_phys(skb->data);
+	EDMA_TXDESC_BUFFER_ADDR_SET(txd, (dma_addr_t)virt_to_phys(skb->data));
 	dmac_clean_range_no_dsb((void *)skb->data, (void *)(skb->data + buf_len));
 
 	EDMA_TXDESC_SERVICE_CODE_SET(txd, EDMA_SC_BYPASS);
@@ -403,10 +406,11 @@ static uint32_t edma_tx_skb_sg_fill_desc(struct nss_dp_dev *dp_dev, struct edma_
 			 * We make sure to flush this descriptor later
 			 */
 			EDMA_TXDESC_MORE_BIT_SET(txd, 1);
+			EDMA_TXDESC_ENDIAN_SET(txd);
 
 			txd = EDMA_TXDESC_PRI_DESC(txdesc_ring, *hw_next_to_use);
 			edma_tx_desc_init(txd);
-			txd->word0 = (dma_addr_t)virt_to_phys(iter_skb->data);
+			EDMA_TXDESC_BUFFER_ADDR_SET(txd, (dma_addr_t)virt_to_phys(iter_skb->data));
 			dmac_clean_range_no_dsb((void *)iter_skb->data,
 					(void *)(iter_skb->data + buf_len));
 
@@ -432,6 +436,8 @@ static uint32_t edma_tx_skb_sg_fill_desc(struct nss_dp_dev *dp_dev, struct edma_
 				u64_stats_update_end(&stats->syncp);
 			}
 		}
+
+		EDMA_TXDESC_ENDIAN_SET(txd);
 
 		/*
 		 * This will be the index previous to
@@ -554,6 +560,7 @@ enum edma_tx edma_tx_ring_xmit(struct net_device *netdev, struct sk_buff *skb,
 	 */
 	if (likely(!skb_is_nonlinear(skb))) {
 		txdesc = edma_tx_skb_first_desc(dp_dev, txdesc_ring, skb, &hw_next_to_use, stats);
+		EDMA_TXDESC_ENDIAN_SET(txdesc);
 		num_desc_filled++;
 	} else {
 		num_tx_desc_needed += 1;
