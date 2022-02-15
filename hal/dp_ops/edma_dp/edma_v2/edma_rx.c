@@ -19,6 +19,7 @@
 #include <asm/cacheflush.h>
 #include <linux/version.h>
 #include <linux/netdevice.h>
+#include <ppe_drv_public.h>
 #include "edma.h"
 #include "edma_debug.h"
 #include "edma_regs.h"
@@ -188,6 +189,59 @@ static inline void edma_rx_checksum_verify(struct edma_rxdesc_desc *rxdesc_desc,
 }
 
 /*
+ * edma_rx_handle_sc_cc_packets()
+ *	Handle packets with service code or CPU code.
+ *
+ * NOTE: We give higher priority to CPU code, since they are related
+ * to exception and required to flush an existing decelerated flow by
+ * hardware.
+ */
+static inline bool edma_rx_handle_sc_cc_packets(struct edma_gbl_ctx *egc,
+		struct edma_rxdesc_ring *rxdesc_ring,
+		struct edma_rxdesc_desc *rxdesc_head,
+		struct sk_buff *skb)
+{
+	uint16_t desc_index, next_desc_index;
+	uint8_t cpu_code, service_code;
+	struct edma_rxdesc_sec_desc *rxdesc_sec, *next_rxdesc_sec;
+
+	/*
+	 * The primary descriptor has CPU code valid indication bit while
+	 * the CPU code is available in secondary descriptor.
+	 */
+	if (likely(EDMA_RXDESC_CPU_CODE_VALID_GET(rxdesc_head))) {
+		desc_index = ((uint8_t *)rxdesc_head - (uint8_t *)rxdesc_ring->pdesc) >> EDMA_RXDESC_SIZE_SHIFT;
+		rxdesc_sec = EDMA_RXDESC_SEC_DESC(rxdesc_ring, desc_index);
+		cpu_code = EDMA_RXDESC_CPU_CODE_GET(rxdesc_sec);
+
+		/*
+		 * Depending on the use-case, sometime PPE generate the same CPU
+		 * code for every packet, prefetch the next secondary descriptor
+		 * to handle such cases.
+		 */
+		next_desc_index = (desc_index + 1) & EDMA_RX_RING_SIZE_MASK;
+		next_rxdesc_sec = EDMA_RXDESC_SEC_DESC(rxdesc_ring, next_desc_index);
+		prefetch(next_rxdesc_sec);
+
+		if (cpu_code && ppe_drv_cc_process_skbuff(cpu_code, skb)) {
+			return true;
+		}
+	}
+
+	/*
+	 * Process if there is any service code.
+	 */
+	service_code = EDMA_RXDESC_SERVICE_CODE_GET(rxdesc_head);
+	if (likely(service_code)) {
+		if (ppe_drv_sc_process_skbuff(service_code, skb)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/*
  * edma_rx_handle_scatter_frames()
  *	Handle scattered packets in Rx direction
  *
@@ -228,6 +282,7 @@ static void edma_rx_handle_scatter_frames(struct edma_gbl_ctx *egc,
 			skb_put(skb, pkt_length);
 			rxdesc_ring->head = skb;
 			rxdesc_ring->last = NULL;
+			rxdesc_ring->pdesc_head = rxdesc_desc;
 			return;
 		}
 
@@ -340,6 +395,28 @@ process_last_scatter:
 	edma_debug("edma_gbl_ctx:%px skb:%px Jumbo pkt_length:%u\n", egc, rxdesc_ring_head, rxdesc_ring_head->len);
 
 	/*
+	 * See if this packet is tagged with a special service code
+	 * or CPU code.
+	 */
+	if (likely(rxdesc_ring->pdesc_head) && unlikely(EDMA_RXDESC_SC_CC_VALID_GET(rxdesc_ring->pdesc_head))) {
+		/*
+		 * NOTE:
+		 * 1. We are combining both the checks together here to reduce
+		 *    a branch instruction in regular data path processing.
+		 *
+		 * 2. If the service code/cpu code processing consumes the packet,
+		 *    don't send it to stack otherwise continue with regular processing.
+		 */
+		struct edma_rxdesc_desc *pdesc_head = rxdesc_ring->pdesc_head;
+		rxdesc_ring->pdesc_head = NULL;
+		if (edma_rx_handle_sc_cc_packets(egc, rxdesc_ring, pdesc_head, rxdesc_ring_head)) {
+			rxdesc_ring->head = NULL;
+			rxdesc_ring->last = NULL;
+			return;
+		}
+	}
+
+	/*
 	 * Send packet up the stack
 	 */
 #if defined(NSS_DP_ENABLE_NAPI_GRO)
@@ -431,6 +508,24 @@ send_to_stack:
 			egc, skb, skb->len);
 
 	skb->protocol = eth_type_trans(skb, skb->dev);
+
+	/*
+	 * See if this packet is tagged with a special service code
+	 * or CPU code.
+	 */
+	if (unlikely(EDMA_RXDESC_SC_CC_VALID_GET(rxdesc_desc))) {
+		/*
+		 * NOTE:
+		 * 1. We are combining both the checks together here to reduce
+		 *    a branch instruction in regular data path processing.
+		 *
+		 * 2. If the service code/cpu code processing consumes the packet,
+		 *    don't send it to stack otherwise continue with regular processing.
+		 */
+		if (edma_rx_handle_sc_cc_packets(egc, rxdesc_ring, rxdesc_desc, skb)) {
+			return true;
+		}
+	}
 
 	/*
 	 * Send packet upto network stack

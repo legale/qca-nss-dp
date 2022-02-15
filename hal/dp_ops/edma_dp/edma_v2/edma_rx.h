@@ -72,7 +72,6 @@
 						EDMA_RXDESC_L3CSUM_STATUS_MASK)
 #define EDMA_RXDESC_L4CSUM_STATUS_GET(desc)	((le32_to_cpu((desc)->word6)) & \
 						EDMA_RXDESC_L4CSUM_STATUS_MASK)
-#define EDMA_RXDESC_SERVICE_CODE_GET(desc)	((le32_to_cpu((desc)->word7)) & 0x1FF)
 #define EDMA_RXDESC_PID_GET(desc)		(((le32_to_cpu((desc)->word7)) & 0x7000) >> 0x0C)
 
 #define EDMA_RXFILL_BUF_SIZE_MASK		0xFFFF
@@ -91,6 +90,15 @@
 	cpu_to_le32s(&((desc)->word1)); \
 }
 #define EDMA_RXFILL_BUFFER_ADDR_SET(desc, addr)	(((desc)->word0) = (uint32_t)(cpu_to_le32(addr)))
+#define EDMA_RXDESC_SC_CC_VALID_GET(desc)	(((desc)->word1) & 0x01FF1000)
+#define EDMA_RXDESC_CPU_CODE_VALID_GET(desc)	((((desc)->word1) & 0x00001000) >> 12)
+#define EDMA_RXDESC_SERVICE_CODE_GET(desc)	((((desc)->word1) & 0x01FF0000) >> 16)
+#define EDMA_RXDESC_CPU_CODE_GET(desc)		((((desc)->word5) & 0x03FF0000) >> 16)
+
+/*
+ * RX DESC size shift to obtain index from descriptor pointer
+ */
+#define EDMA_RXDESC_SIZE_SHIFT		5
 
 /*
  * edma_rx_stats
@@ -192,6 +200,8 @@ struct edma_rxdesc_ring {
 	uint32_t cons_idx;		/* Ring consumer index */
 	struct edma_rxdesc_desc *pdesc;
 					/* Primary descriptor ring virtual address */
+	struct edma_rxdesc_desc *pdesc_head;
+					/* Primary descriptor head in case of scatter-gather frame */
 	struct edma_rxdesc_sec_desc *sdesc;
 					/* Secondary descriptor ring virtual address */
 	struct edma_rx_desc_stats rx_desc_stats;
