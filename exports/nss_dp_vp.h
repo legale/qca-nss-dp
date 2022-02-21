@@ -17,15 +17,15 @@
 #ifndef __NSS_DP_VP_H__
 #define __NSS_DP_VP_H__
 
-/**
+/*
  * nss_dp_vp_tx_info
  *	VP Tx info.
  */
 struct nss_dp_vp_tx_info {
-	uint32_t flags;			/* VP Tx flags */
-	uint8_t sc;			/* Service code */
-	uint8_t svp;			/* Source port */
-	bool fake_mac;			/* Fake Mac */
+	uint32_t flags;			/**< VP Tx flags. */
+	uint8_t sc;			/**< Service code. */
+	uint8_t svp;			/**< Source VP number. */
+	bool fake_mac;			/**< Needs Fake Mac. */
 };
 
 /**

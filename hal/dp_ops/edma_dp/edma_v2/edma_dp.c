@@ -163,7 +163,7 @@ static netdev_tx_t edma_dp_xmit(struct nss_dp_data_plane_ctx *dpc,
 	/*
 	 * Transmit the packet
 	 */
-	ret = edma_tx_ring_xmit(netdev, skb, txdesc_ring, stats);
+	ret = edma_tx_ring_xmit(netdev, NULL, skb, txdesc_ring, stats);
 	if (likely(ret == EDMA_TX_OK)) {
 		return NETDEV_TX_OK;
 	}

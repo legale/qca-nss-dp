@@ -39,6 +39,16 @@
 
 #define EDMA_TX_RING_PER_CORE_MAX	(EDMA_TX_MAX_PRIORITY_LEVEL * EDMA_MAX_PORTS)
 
+#define EDMA_SRC_PORT_TYPE		2
+#define EDMA_SRC_PORT_TYPE_SHIFT	12
+#define EDMA_SRC_PORT_TYPE_MASK		(0xf << EDMA_SRC_PORT_TYPE_SHIFT)
+#define EDMA_SRC_PORT_ID_SHIFT		0
+#define EDMA_SRC_PORT_ID_MASK		(0xfff << EDMA_SRC_PORT_ID_SHIFT)
+
+#define EDMA_SRC_PORT_TYPE_SET(x)	(((x) << EDMA_SRC_PORT_TYPE_SHIFT) & EDMA_SRC_PORT_TYPE_MASK)
+#define EDMA_SRC_PORT_ID_SET(x)		(((x) << EDMA_SRC_PORT_ID_SHIFT) & EDMA_SRC_PORT_ID_MASK)
+#define EDMA_SRC_INFO_SET(desc, x)	(desc->word4 |= (EDMA_SRC_PORT_TYPE_SET(EDMA_SRC_PORT_TYPE) | EDMA_SRC_PORT_ID_SET(x)))
+
 #define EDMA_DST_PORT_TYPE		2
 #define EDMA_DST_PORT_TYPE_SHIFT	28
 #define EDMA_DST_PORT_TYPE_MASK		(0xf << EDMA_DST_PORT_TYPE_SHIFT)
@@ -72,6 +82,11 @@
 #define EDMA_TXDESC_SERVICE_CODE_MASK	(0x1FF << EDMA_TXDESC_SERVICE_CODE_SHIFT)
 #define EDMA_TXDESC_SERVICE_CODE_SET(desc, x)	((desc)->word1 |= (((x) << EDMA_TXDESC_SERVICE_CODE_SHIFT) & EDMA_TXDESC_SERVICE_CODE_MASK))
 #define EDMA_TXDESC_BUFFER_ADDR_SET(desc, addr)	(((desc)->word0) = (addr))
+
+#define EDMA_TXDESC_FAKE_MAC_HDR_SHIFT		10
+#define EDMA_TXDESC_FAKE_MAC_HDR_MASK		(0x1 << EDMA_TXDESC_FAKE_MAC_HDR_SHIFT)
+#define EDMA_TXDESC_FAKE_MAC_HDR_SET(desc, x)	(desc->word1 |= (((x) << EDMA_TXDESC_FAKE_MAC_HDR_SHIFT) & (EDMA_TXDESC_FAKE_MAC_HDR_MASK)))
+
 #ifdef __LP64__
 #define EDMA_TXDESC_OPAQUE_GET(desc)		(((uint64_t)(desc)->word3 << 32) | (desc)->word2)
 #define EDMA_TXCMPL_OPAQUE_GET(desc)		(((uint64_t)(desc)->word1 << 32) | (desc)->word0)
@@ -228,8 +243,8 @@ struct edma_txcmpl_ring {
 	bool napi_added;		/* Flag to indicate NAPI add status */
 };
 
-enum edma_tx edma_tx_ring_xmit(struct net_device *netdev, struct sk_buff *skb,
-				struct edma_txdesc_ring *txdesc_ring,
+enum edma_tx edma_tx_ring_xmit(struct net_device *netdev, struct nss_dp_vp_tx_info *dptxi,
+				struct sk_buff *skb, struct edma_txdesc_ring *txdesc_ring,
 				struct edma_tx_stats *stats);
 uint32_t edma_tx_complete(uint32_t work_to_do,
 				struct edma_txcmpl_ring *txcmpl_ring);

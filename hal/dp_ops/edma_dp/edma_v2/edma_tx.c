@@ -285,13 +285,79 @@ static uint32_t edma_tx_skb_nr_frags(struct edma_txdesc_ring *txdesc_ring, struc
 }
 
 /*
+ * edma_tx_fill_vp_desc()
+ *	Enable PPE processing with VP as source port
+ */
+static inline void edma_tx_fill_vp_desc(struct nss_dp_dev *dp_dev, struct edma_pri_txdesc *txd,
+			struct sk_buff *skb, struct nss_dp_vp_tx_info *dptxi)
+{
+	EDMA_TXDESC_SERVICE_CODE_SET(txd, dptxi->sc);
+
+	/*
+	 * Set fake mac bit needed for L3 interfaces
+	 */
+	EDMA_TXDESC_FAKE_MAC_HDR_SET(txd, dptxi->fake_mac);
+
+	/*
+	 * Set Source port information in the descriptor
+	 */
+	EDMA_SRC_INFO_SET(txd, dptxi->svp);
+	EDMA_DST_INFO_SET(txd, 0);
+}
+
+/*
+ * edma_tx_fill_pp_desc()
+ *	Populate descriptor fields to bypass PPE processing and forward
+ */
+static inline void edma_tx_fill_pp_desc(struct nss_dp_dev *dp_dev, struct edma_pri_txdesc *txd,
+					struct sk_buff *skb, struct edma_tx_stats *stats)
+{
+	/*
+	 * Offload L3/L4 checksum computation
+	 */
+	if (likely(skb->ip_summed == CHECKSUM_PARTIAL)) {
+		EDMA_TXDESC_ADV_OFFLOAD_SET(txd);
+		EDMA_TXDESC_IP_CSUM_SET(txd);
+		EDMA_TXDESC_L4_CSUM_SET(txd);
+	}
+
+	/*
+	 * Check if the packet needs TSO
+	 * This will be mostly true for SG packets.
+	 */
+	if (unlikely(skb_is_gso(skb))) {
+		if ((skb_shinfo(skb)->gso_type == SKB_GSO_TCPV4) ||
+				(skb_shinfo(skb)->gso_type == SKB_GSO_TCPV6)){
+			uint32_t mss;
+			mss = skb_shinfo(skb)->gso_size;
+			EDMA_TXDESC_TSO_ENABLE_SET(txd, 1);
+			EDMA_TXDESC_MSS_SET(txd, mss);
+
+			/*
+			 * Update tso stats
+			 */
+			u64_stats_update_begin(&stats->syncp);
+			stats->tx_tso_pkts++;
+			u64_stats_update_end(&stats->syncp);
+		}
+	}
+
+	/*
+	 * Set destination information in the descriptor
+	 */
+	EDMA_TXDESC_SERVICE_CODE_SET(txd, EDMA_SC_BYPASS);
+	EDMA_DST_INFO_SET(txd, dp_dev->macid);
+}
+
+/*
  * edma_tx_skb_first_desc()
  *	Process the Tx for the first descriptor required for skb
  */
 static struct edma_pri_txdesc *edma_tx_skb_first_desc(struct nss_dp_dev *dp_dev, struct edma_txdesc_ring *txdesc_ring,
-					struct sk_buff *skb, uint32_t *hw_next_to_use, struct edma_tx_stats *stats)
+					struct nss_dp_vp_tx_info *dptxi, struct sk_buff *skb, uint32_t *hw_next_to_use,
+					struct edma_tx_stats *stats)
 {
-	uint32_t buf_len = 0, mss = 0;
+	uint32_t buf_len = 0;
 	struct edma_pri_txdesc *txd = NULL;
 
 	/*
@@ -309,46 +375,16 @@ static struct edma_pri_txdesc *edma_tx_skb_first_desc(struct nss_dp_dev *dp_dev,
 	EDMA_TXDESC_BUFFER_ADDR_SET(txd, (dma_addr_t)virt_to_phys(skb->data));
 	dmac_clean_range_no_dsb((void *)skb->data, (void *)(skb->data + buf_len));
 
-	EDMA_TXDESC_SERVICE_CODE_SET(txd, EDMA_SC_BYPASS);
-
-	/*
-	 * Offload L3/L4 checksum computation
-	 */
-	if (likely(skb->ip_summed == CHECKSUM_PARTIAL)) {
-		EDMA_TXDESC_ADV_OFFLOAD_SET(txd);
-		EDMA_TXDESC_IP_CSUM_SET(txd);
-		EDMA_TXDESC_L4_CSUM_SET(txd);
-	}
-
-	/*
-	 * Check if the packet needs TSO
-	 * This will be mostly true for SG packets.
-	 */
-	if (unlikely(skb_is_gso(skb))) {
-		if ((skb_shinfo(skb)->gso_type == SKB_GSO_TCPV4) ||
-				(skb_shinfo(skb)->gso_type == SKB_GSO_TCPV6)){
-			mss = skb_shinfo(skb)->gso_size;
-			EDMA_TXDESC_TSO_ENABLE_SET(txd, 1);
-			EDMA_TXDESC_MSS_SET(txd, mss);
-
-			/*
-			 * Update tso stats
-			 */
-			u64_stats_update_begin(&stats->syncp);
-			stats->tx_tso_pkts++;
-			u64_stats_update_end(&stats->syncp);
-		}
+	if (dptxi) {
+		edma_tx_fill_vp_desc(dp_dev, txd, skb, dptxi);
+	} else {
+		edma_tx_fill_pp_desc(dp_dev, txd, skb, stats);
 	}
 
 	/*
 	 * Set packet length in the descriptor
 	 */
 	EDMA_TXDESC_DATA_LEN_SET(txd, buf_len);
-
-	/*
-	 * Set destination information in the descriptor
-	 */
-	EDMA_DST_INFO_SET(txd, dp_dev->macid);
 
 	*hw_next_to_use = (*hw_next_to_use + 1) & EDMA_TX_RING_SIZE_MASK;
 
@@ -369,9 +405,8 @@ static uint32_t edma_tx_skb_sg_fill_desc(struct nss_dp_dev *dp_dev, struct edma_
 	struct edma_pri_txdesc *txd = *txdesc;
 
 	/*
-	 * Process head skb
+	 * Head skb processed already
 	 */
-	txd = edma_tx_skb_first_desc(dp_dev, txdesc_ring, skb, hw_next_to_use, stats);
 	num_descs++;
 
 	/*
@@ -530,7 +565,7 @@ static uint32_t edma_tx_avail_desc(struct edma_txdesc_ring *txdesc_ring, uint32_
  * edma_tx_ring_xmit()
  *	API to transmit a packet.
  */
-enum edma_tx edma_tx_ring_xmit(struct net_device *netdev, struct sk_buff *skb,
+enum edma_tx edma_tx_ring_xmit(struct net_device *netdev, struct nss_dp_vp_tx_info *dptxi, struct sk_buff *skb,
 				struct edma_txdesc_ring *txdesc_ring,
 				struct edma_tx_stats *stats)
 {
@@ -560,7 +595,7 @@ enum edma_tx edma_tx_ring_xmit(struct net_device *netdev, struct sk_buff *skb,
 	 * Process head skb + nr_frags + fraglist for non linear skb
 	 */
 	if (likely(!skb_is_nonlinear(skb))) {
-		txdesc = edma_tx_skb_first_desc(dp_dev, txdesc_ring, skb, &hw_next_to_use, stats);
+		txdesc = edma_tx_skb_first_desc(dp_dev, txdesc_ring, dptxi, skb, &hw_next_to_use, stats);
 		EDMA_TXDESC_ENDIAN_SET(txdesc);
 		num_desc_filled++;
 	} else {
@@ -594,6 +629,7 @@ enum edma_tx edma_tx_ring_xmit(struct net_device *netdev, struct sk_buff *skb,
 			}
 		}
 
+		txdesc = edma_tx_skb_first_desc(dp_dev, txdesc_ring, dptxi, skb, &hw_next_to_use, stats);
 		num_desc_filled = edma_tx_skb_sg_fill_desc(dp_dev, txdesc_ring, &txdesc, skb, &hw_next_to_use, stats);
 	}
 

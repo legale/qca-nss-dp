@@ -15,6 +15,9 @@
  */
 
 #include "nss_dp_dev.h"
+#include "edma_regs.h"
+#include "edma_debug.h"
+#include "edma.h"
 
 /*
  * edma_dp_vp_xmit()
@@ -23,5 +26,33 @@
 netdev_tx_t edma_dp_vp_xmit(struct nss_dp_data_plane_ctx *dpc, struct nss_dp_vp_tx_info *dptxi,
 					struct sk_buff *skb)
 {
+	struct net_device *vpdev = dpc->dev;
+	struct nss_dp_dev *dp_dev = netdev_priv(vpdev);
+	struct edma_txdesc_ring *txdesc_ring;
+	struct edma_pcpu_stats *pcpu_stats;
+	struct edma_tx_stats *stats;
+	int ret;
+
+	/*
+	 * Select a TX ring based on current core
+	 */
+	txdesc_ring = (struct edma_txdesc_ring *)dp_dev->dp_info.txr_map[0][smp_processor_id()];
+
+	pcpu_stats = &dp_dev->dp_info.pcpu_stats;
+	stats = this_cpu_ptr(pcpu_stats->tx_stats);
+
+	/*
+	 * Transmit the packet
+	 */
+	ret = edma_tx_ring_xmit(vpdev, dptxi, skb, txdesc_ring, stats);
+	if (likely(ret == EDMA_TX_OK)) {
+		return NETDEV_TX_OK;
+	}
+
+	dev_kfree_skb_any(skb);
+	u64_stats_update_begin(&stats->syncp);
+	++stats->tx_drops;
+	u64_stats_update_end(&stats->syncp);
+
 	return NETDEV_TX_OK;
 }
