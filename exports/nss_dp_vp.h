@@ -28,6 +28,50 @@ struct nss_dp_vp_tx_info {
 	bool fake_mac;			/**< Needs Fake Mac. */
 };
 
+/*
+ * nss_dp_vp_rx_info
+ *	VP info struct struct
+ */
+struct nss_dp_vp_rx_info {
+	uint8_t dvp;		/* Destination VP number */
+	uint8_t svp;		/* Source VP number */
+	uint16_t l3offset;	/* L3 offset of packet */
+};
+
+/*
+ * nss_dp_vp_rx_cb_t
+ *	Vp rx handler callback typedef
+ */
+typedef void (*nss_dp_vp_rx_cb_t)(struct sk_buff *skb, struct nss_dp_vp_rx_info *vprxi);
+
+/**
+ * nss_dp_vp_rx_register_cb
+ *	Register handler for VP rx processing.
+ *
+ * @datatypes
+ * nss_dp_vp_rx_cb_t
+ *
+ * @param[in] nss_dp_vp_tx_info Pointer to VP rx handler.
+ *
+ * @return
+ * True or false.
+ */
+bool nss_dp_vp_rx_register_cb(nss_dp_vp_rx_cb_t cb);
+
+/**
+ * nss_dp_vp_rx_unregister_cb
+ *	Unregister VP handler for VP rx processing.
+ *
+ * @datatypes
+ * None.
+ *
+ * @param[in] nss_dp_vp_tx_info Pointer to VP rx handler.
+ *
+ * @return
+ * None.
+ */
+void nss_dp_vp_rx_unregister_cb(void);
+
 /**
  * nss_dp_vp_xmit
  *	Transmits a packet to the appropriate VP netdevice.

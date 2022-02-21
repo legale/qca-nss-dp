@@ -20,10 +20,61 @@
 #include <linux/version.h>
 #include <linux/netdevice.h>
 #include <ppe_drv_public.h>
+#include <nss_dp_vp.h>
 #include "edma.h"
 #include "edma_debug.h"
 #include "edma_regs.h"
 #include "nss_dp_dev.h"
+
+extern nss_dp_vp_rx_cb_t nss_dp_vp_rx_reg_cb;
+
+/*
+ * edma_rx_process_vp()
+ *	Forward packet to VP module for processing.
+ */
+static inline void edma_rx_process_vp(struct edma_rxdesc_desc *rxdesc_desc, struct sk_buff *skb)
+{
+	uint32_t dst_port;
+	nss_dp_vp_rx_cb_t edma_rx_vp_cb;
+	struct nss_dp_vp_rx_info vprxi;
+
+	rcu_read_lock();
+	edma_rx_vp_cb = rcu_dereference(nss_dp_vp_rx_reg_cb);
+	if (unlikely(!edma_rx_vp_cb)) {
+		struct edma_pcpu_stats *pcpu_stats;
+		struct edma_rx_stats *rx_stats;
+		struct nss_dp_dev *vp_dev;
+
+		rcu_read_unlock();
+		edma_warn("Vp packet recieved but edma vp callback \
+				not registered yet, skb:%px\n", skb);
+		vp_dev = netdev_priv(skb->dev);
+		dev_kfree_skb_any(skb);
+
+		pcpu_stats = &vp_dev->dp_info.pcpu_stats;
+		rx_stats = this_cpu_ptr(pcpu_stats->rx_stats);
+		u64_stats_update_begin(&rx_stats->syncp);
+		rx_stats->rx_vp_uninitialized++;
+		u64_stats_update_end(&rx_stats->syncp);
+		return;
+	}
+
+	dst_port = EDMA_RXDESC_DST_INFO_GET(rxdesc_desc);
+	if (likely((dst_port & ~EDMA_RXDESC_DST_PORT_ID_MASK) == EDMA_RXDESC_DST_PORT)) {
+		vprxi.dvp = EDMA_RXDESC_DST_PORT_ID_GET(rxdesc_desc);
+	} else {
+		vprxi.dvp = 0;
+	}
+
+	vprxi.l3offset = EDMA_RXDESC_L3_OFFSET_GET(rxdesc_desc);
+	vprxi.svp = EDMA_RXDESC_SRC_INFO_GET(rxdesc_desc) & EDMA_RXDESC_PORTNUM_BITS;
+
+	/*
+	 * Pass the packet to VP to process
+	 */
+	edma_rx_vp_cb(skb, &vprxi);
+	rcu_read_unlock();
+}
 
 /*
  * edma_rx_alloc_buffer()
@@ -319,6 +370,7 @@ static void edma_rx_handle_scatter_frames(struct edma_gbl_ctx *egc,
 		skb->truesize = SKB_TRUESIZE(PAGE_SIZE);
 		rxdesc_ring->head = skb;
 		rxdesc_ring->last = NULL;
+		rxdesc_ring->pdesc_head = rxdesc_desc;
 		return;
 	}
 
@@ -371,6 +423,7 @@ process_last_scatter:
 			dev_kfree_skb_any(rxdesc_ring_head);
 			rxdesc_ring->head = NULL;
 			rxdesc_ring->last = NULL;
+			rxdesc_ring->pdesc_head = NULL;
 
 			u64_stats_update_begin(&rx_stats->syncp);
 			rx_stats->rx_nr_frag_headroom_err++;
@@ -390,8 +443,6 @@ process_last_scatter:
 	rx_stats->rx_fraglist_pkts += (uint64_t)(!page_mode);
 	u64_stats_update_end(&rx_stats->syncp);
 
-	rxdesc_ring_head->protocol = eth_type_trans(rxdesc_ring_head, dev);
-
 	edma_debug("edma_gbl_ctx:%px skb:%px Jumbo pkt_length:%u\n", egc, rxdesc_ring_head, rxdesc_ring_head->len);
 
 	/*
@@ -408,13 +459,24 @@ process_last_scatter:
 		 *    don't send it to stack otherwise continue with regular processing.
 		 */
 		struct edma_rxdesc_desc *pdesc_head = rxdesc_ring->pdesc_head;
-		rxdesc_ring->pdesc_head = NULL;
 		if (edma_rx_handle_sc_cc_packets(egc, rxdesc_ring, pdesc_head, rxdesc_ring_head)) {
 			rxdesc_ring->head = NULL;
 			rxdesc_ring->last = NULL;
+			rxdesc_ring->pdesc_head = NULL;
 			return;
 		}
 	}
+
+	/*
+	 * Check if packet is meant for VP processing
+	 */
+	if (unlikely(EDMA_RXDESC_SRC_DST_INFO_GET(rxdesc_desc) & EDMA_RXDESC_SRC_DST_VP_MASK)) {
+		edma_rx_process_vp(rxdesc_ring->pdesc_head, rxdesc_ring_head);
+		rxdesc_ring->pdesc_head = NULL;
+		return;
+	}
+
+	rxdesc_ring_head->protocol = eth_type_trans(rxdesc_ring_head, dev);
 
 	/*
 	 * Send packet up the stack
@@ -427,6 +489,7 @@ process_last_scatter:
 
 	rxdesc_ring->head = NULL;
 	rxdesc_ring->last = NULL;
+	rxdesc_ring->pdesc_head = NULL;
 }
 
 /*
@@ -507,8 +570,6 @@ send_to_stack:
 	edma_debug("edma_gbl_ctx:%px, skb:%px pkt_length:%u\n",
 			egc, skb, skb->len);
 
-	skb->protocol = eth_type_trans(skb, skb->dev);
-
 	/*
 	 * See if this packet is tagged with a special service code
 	 * or CPU code.
@@ -528,6 +589,16 @@ send_to_stack:
 	}
 
 	/*
+	 * Check if packet is meant for VP processing
+	 */
+	if (EDMA_RXDESC_SRC_DST_INFO_GET(rxdesc_desc) & EDMA_RXDESC_SRC_DST_VP_MASK) {
+		edma_rx_process_vp(rxdesc_desc, skb);
+		return true;
+	}
+
+	skb->protocol = eth_type_trans(skb, skb->dev);
+
+	/*
 	 * Send packet upto network stack
 	 */
 #if defined(NSS_DP_ENABLE_NAPI_GRO)
@@ -537,6 +608,88 @@ send_to_stack:
 #endif
 
 	return true;
+}
+
+/*
+ * edma_rx_get_src_port_and_dev()
+ *	Get source port and corresponding net device.
+ */
+static inline struct net_device *edma_rx_get_src_dev(
+		struct edma_gbl_ctx *egc,
+		struct edma_rx_desc_stats *rxdesc_stats,
+		struct edma_rxdesc_desc *rxdesc_desc,
+		struct sk_buff *skb)
+{
+	struct net_device *ndev;
+	uint32_t src_info = EDMA_RXDESC_SRC_INFO_GET(rxdesc_desc);
+	uint8_t src_port_num;
+
+	/*
+	 * Check src_info
+	 */
+	if (likely((src_info & EDMA_RXDESC_SRCINFO_TYPE_MASK)
+				== EDMA_RXDESC_SRCINFO_TYPE_PORTID)) {
+		src_port_num = src_info & EDMA_RXDESC_PORTNUM_BITS;
+	} else {
+		edma_warn("Src_info_type:0x%x. Drop skb:%px\n",
+				(src_info &
+				 EDMA_RXDESC_SRCINFO_TYPE_MASK),
+				skb);
+		u64_stats_update_begin(&rxdesc_stats->syncp);
+		++rxdesc_stats->src_port_inval_type;
+		u64_stats_update_end(&rxdesc_stats->syncp);
+		return NULL;
+	}
+
+	/*
+	 * Packet with PP source
+	 */
+	if (unlikely(src_port_num <= NSS_DP_HAL_MAX_PORTS)) {
+		if (unlikely(src_port_num < NSS_DP_START_IFNUM)) {
+			edma_warn("Port number error :%d. \
+					Drop skb:%px\n",
+					src_port_num, skb);
+			u64_stats_update_begin(&rxdesc_stats->syncp);
+			++rxdesc_stats->src_port_inval;
+			u64_stats_update_end(&rxdesc_stats->syncp);
+			return NULL;
+		}
+
+		/*
+		 * Get netdev for this port using the source port
+		 * number as index into the netdev array. We need to
+		 * subtract one since the indices start form '0' and
+		 * port numbers start from '1'.
+		 */
+		ndev = egc->netdev_arr[src_port_num - 1];
+	} else {
+
+		if (unlikely(src_port_num < PPE_DRV_VIRTUAL_START)) {
+			edma_warn("Port number error :%d. \
+					Drop skb:%px\n",
+					src_port_num, skb);
+			u64_stats_update_begin(&rxdesc_stats->syncp);
+			++rxdesc_stats->src_port_inval;
+			u64_stats_update_end(&rxdesc_stats->syncp);
+			return NULL;
+		}
+
+		/*
+		 * Last netdev corresponds to VP dummy netdev
+		 */
+		ndev = egc->netdev_arr[NSS_DP_MAX_PORTS - 1];
+	}
+
+	if (likely(ndev)) {
+		return ndev;
+	}
+
+	edma_warn("Netdev Null src_info_type:0x%x. Drop skb:%px\n",
+			src_port_num, skb);
+	u64_stats_update_begin(&rxdesc_stats->syncp);
+	++rxdesc_stats->src_port_inval_netdev;
+	u64_stats_update_end(&rxdesc_stats->syncp);
+	return NULL;
 }
 
 /*
@@ -604,7 +757,6 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 		struct edma_rxdesc_desc *rxdesc_desc;
 		struct net_device *ndev;
 		struct sk_buff *skb;
-		uint32_t src_port_num;
 
 		skb = next_skb;
 		rxdesc_desc = next_rxdesc_desc;
@@ -624,51 +776,8 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 		 * Handle linear packets or initial segments first
 		 */
 		if (likely(!(rxdesc_ring->head))) {
-			/*
-			 * Check src_info
-			 */
-			src_port_num = EDMA_RXDESC_SRC_INFO_GET(rxdesc_desc);
-			if (likely((src_port_num & EDMA_RXDESC_SRCINFO_TYPE_MASK)
-					== EDMA_RXDESC_SRCINFO_TYPE_PORTID)) {
-				src_port_num &= EDMA_RXDESC_PORTNUM_BITS;
-			} else {
-				edma_warn("Src_info_type:0x%x. Drop skb:%px\n",
-						(src_port_num &
-						EDMA_RXDESC_SRCINFO_TYPE_MASK),
-						skb);
-				u64_stats_update_begin(&rxdesc_stats->syncp);
-				++rxdesc_stats->src_port_inval_type;
-				u64_stats_update_end(&rxdesc_stats->syncp);
-				dev_kfree_skb_any(skb);
-				goto next_rx_desc;
-			}
-
-			if (unlikely((src_port_num < NSS_DP_START_IFNUM) ||
-					(src_port_num > NSS_DP_HAL_MAX_PORTS))) {
-				edma_warn("Port number error :%d. \
-						Drop skb:%px\n",
-						src_port_num, skb);
-				u64_stats_update_begin(&rxdesc_stats->syncp);
-				++rxdesc_stats->src_port_inval;
-				u64_stats_update_end(&rxdesc_stats->syncp);
-				dev_kfree_skb_any(skb);
-				goto next_rx_desc;
-			}
-
-			/*
-			 * Get netdev for this port using the source port
-			 * number as index into the netdev array. We need to
-			 * subtract one since the indices start form '0' and
-			 * port numbers start from '1'.
-			 */
-			ndev = egc->netdev_arr[src_port_num - 1];
-			if (unlikely(!ndev)) {
-				edma_warn("Netdev Null src_info_type:0x%x. \
-						Drop skb:%px\n",
-						src_port_num, skb);
-				u64_stats_update_begin(&rxdesc_stats->syncp);
-				++rxdesc_stats->src_port_inval_netdev;
-				u64_stats_update_end(&rxdesc_stats->syncp);
+			ndev = edma_rx_get_src_dev(egc, rxdesc_stats, rxdesc_desc, skb);
+			if(unlikely(!ndev)) {
 				dev_kfree_skb_any(skb);
 				goto next_rx_desc;
 			}

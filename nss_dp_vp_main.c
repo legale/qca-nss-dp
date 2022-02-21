@@ -30,6 +30,7 @@
 #include "nss_dp_dev.h"
 
 extern struct net_device_ops nss_dp_netdev_ops;
+nss_dp_vp_rx_cb_t nss_dp_vp_rx_reg_cb = NULL;
 
 /*
  * nss_dp_vp_xmit()
@@ -47,6 +48,29 @@ netdev_tx_t nss_dp_vp_xmit(struct net_device *netdev, struct nss_dp_vp_tx_info *
 	return dp_priv->data_plane_ops->vp_xmit(dp_priv->dpc, info, skb);
 }
 EXPORT_SYMBOL(nss_dp_vp_xmit);
+
+/*
+ * nss_dp_vp_rx_register_cb()
+ *	Register VP callback
+ */
+bool nss_dp_vp_rx_register_cb(nss_dp_vp_rx_cb_t cb)
+{
+	rcu_assign_pointer(nss_dp_vp_rx_reg_cb, cb);
+	synchronize_rcu();
+	return true;
+}
+EXPORT_SYMBOL(nss_dp_vp_rx_register_cb);
+
+/*
+ * nss_dp_vp_rx_unregister_cb()
+ *	Unregister VP callback
+ */
+void nss_dp_vp_rx_unregister_cb(void)
+{
+	rcu_assign_pointer(nss_dp_vp_rx_reg_cb, NULL);
+	synchronize_rcu();
+}
+EXPORT_SYMBOL(nss_dp_vp_rx_unregister_cb);
 
 /*
  * nss_dp_vp_init()

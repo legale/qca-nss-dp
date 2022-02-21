@@ -25,6 +25,14 @@
 						   replenishing RxFill ring */
 #define EDMA_RX_SKB_HEADROOM		128
 
+/*
+ * Helper function for generating mask for bit field in a word. This will generate a mask which will
+ * enable bits from start to end(both inclusive) of the bit field in a word.
+ * For ex: field A extends from 15:8 of a word. here end=15, start=8. This macro generates the mask
+ * as 1111111100000000
+ */
+#define EDMA_RXDESC_GENMASK(end, start)	(uint32_t)((((uint64_t)1 << ((end) - (start) + 1)) - 1) << (start))
+
 #define EDMA_GET_DESC(R, i, type)	(&(((type *)((R)->desc))[(i)]))
 #define EDMA_GET_PDESC(R, i, type)	(&(((type *)((R)->pdesc))[(i)]))
 #define EDMA_GET_SDESC(R, i, type)	(&(((type *)((R)->sdesc))[(i)]))
@@ -67,12 +75,47 @@
 #define EDMA_RXDESC_MORE_BIT_MASK		0x40000000
 #define EDMA_RXDESC_MORE_BIT_GET(desc)		((le32_to_cpu((desc)->word1)) & \
 						EDMA_RXDESC_MORE_BIT_MASK)
-#define EDMA_RXDESC_SRC_INFO_GET(desc)		((le32_to_cpu((desc)->word4)) & 0xFFFF)
-#define EDMA_RXDESC_L3CSUM_STATUS_GET(desc)	((le32_to_cpu((desc)->word6)) & \
+#define EDMA_RXDESC_SRC_DST_INFO_GET(desc)	((uint32_t)((le32_to_cpu((desc)->word4))))
+
+#define EDMA_RXDESC_L3_OFFSET_SHIFT 	16
+#define EDMA_RXDESC_L3_OFFSET_MASK  	EDMA_RXDESC_GENMASK(23, 16)
+#define EDMA_RXDESC_L3_OFFSET_GET(desc)	((le32_to_cpu(((desc)->word7)) & EDMA_RXDESC_L3_OFFSET_MASK) >> EDMA_RXDESC_L3_OFFSET_SHIFT)
+
+#define EDMA_RXDESC_PID_SHIFT		12
+#define EDMA_RXDESC_PID_MASK		EDMA_RXDESC_GENMASK(15, 12)
+#define EDMA_RXDESC_PID_GET(desc)	((le32_to_cpu(((desc)->word7)) & EDMA_RXDESC_PID_MASK) >> EDMA_RXDESC_PID_SHIFT)
+
+#define EDMA_RXDESC_DST_INFO_SHIFT	16
+#define EDMA_RXDESC_DST_INFO_MASK	EDMA_RXDESC_GENMASK(31, 16)
+#define EDMA_RXDESC_DST_INFO_GET(desc)	((le32_to_cpu(((desc)->word4)) & EDMA_RXDESC_DST_INFO_MASK) >> EDMA_RXDESC_DST_INFO_SHIFT)
+
+#define EDMA_RXDESC_SRC_INFO_SHIFT	0
+#define EDMA_RXDESC_SRC_INFO_MASK	EDMA_RXDESC_GENMASK(15, 0)
+#define EDMA_RXDESC_SRC_INFO_GET(desc)	((le32_to_cpu(((desc)->word4)) & EDMA_RXDESC_SRC_INFO_MASK) >> EDMA_RXDESC_SRC_INFO_SHIFT)
+
+#define EDMA_RXDESC_PORT_ID_SHIFT	0
+#define EDMA_RXDESC_PORT_ID_MASK	EDMA_RXDESC_GENMASK(11, 0)
+#define EDMA_RXDESC_PORT_ID_GET(x)	(((x) & EDMA_RXDESC_PORT_ID_MASK) >> EDMA_RXDESC_PORT_ID_SHIFT)
+
+#define EDMA_RXDESC_SRC_PORT_ID_GET(desc)	EDMA_RXDESC_PORT_ID_GET(EDMA_RXDESC_SRC_INFO_GET(desc))
+#define EDMA_RXDESC_DST_PORT_ID_GET(desc)	EDMA_RXDESC_PORT_ID_GET(EDMA_RXDESC_DST_INFO_GET(desc))
+
+#define EDMA_RXDESC_SRC_PORT_ID_MASK	EDMA_RXDESC_PORT_ID_MASK
+#define EDMA_RXDESC_DST_PORT_ID_MASK	EDMA_RXDESC_PORT_ID_MASK
+
+#define EDMA_RXDESC_DST_PORT		0x2 << EDMA_RXDESC_PID_SHIFT
+
+/*
+ * Mask for checking source or destination virtual port.
+ * Note: PPE virtual port start from 64 onwards
+ */
+#define EDMA_RXDESC_VP_PORT_MASK	0x00c0
+#define EDMA_RXDESC_SRC_DST_VP_MASK	(EDMA_RXDESC_VP_PORT_MASK | (EDMA_RXDESC_VP_PORT_MASK << 16))
+
+#define EDMA_RXDESC_L3CSUM_STATUS_GET(desc)	(le32_to_cpu(((desc)->word6)) & \
 						EDMA_RXDESC_L3CSUM_STATUS_MASK)
 #define EDMA_RXDESC_L4CSUM_STATUS_GET(desc)	((le32_to_cpu((desc)->word6)) & \
 						EDMA_RXDESC_L4CSUM_STATUS_MASK)
-#define EDMA_RXDESC_PID_GET(desc)		(((le32_to_cpu((desc)->word7)) & 0x7000) >> 0x0C)
 
 #define EDMA_RXFILL_BUF_SIZE_MASK		0xFFFF
 #define EDMA_RXFILL_BUF_SIZE_SHIFT		16
@@ -111,6 +154,7 @@ struct edma_rx_stats {
 	uint64_t rx_nr_frag_pkts;
 	uint64_t rx_fraglist_pkts;
 	uint64_t rx_nr_frag_headroom_err;
+	uint64_t rx_vp_uninitialized;
 	struct u64_stats_sync syncp;
 };
 
