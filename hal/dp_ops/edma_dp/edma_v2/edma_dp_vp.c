@@ -1,6 +1,4 @@
 /*
- * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- *
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -16,35 +14,14 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef __NSS_DP_ARCH_H__
-#define __NSS_DP_ARCH_H__
-
-#define NSS_DP_HAL_MAX_PORTS		6
-#define NSS_DP_MAX_PORTS		NSS_DP_HAL_MAX_PORTS
-#define NSS_DP_HAL_CPU_NUM		4
-#define NSS_DP_HAL_START_IFNUM		1
-#define NSS_DP_PREHEADER_SIZE		32
+#include "nss_dp_dev.h"
 
 /*
- * Number of TX/RX queue supported
+ * edma_dp_vp_xmit()
+ *	Transmit a packet using EDMA from VP.
  */
-#define NSS_DP_QUEUE_NUM		4
-
-/*
- * TX/RX NAPI budget
- */
-#define NSS_DP_HAL_RX_NAPI_BUDGET	32
-#define NSS_DP_HAL_TX_NAPI_BUDGET	32
-
-/**
- * nss_dp_hal_gmac_stats
- *	The per-GMAC statistics structure.
- */
-struct nss_dp_hal_gmac_stats {
-};
-
-extern int edma_init(void);
-extern void edma_cleanup(bool is_dp_override);
-extern struct nss_dp_data_plane_ops nss_dp_edma_ops;
-
-#endif /* __NSS_DP_ARCH_H__ */
+netdev_tx_t edma_dp_vp_xmit(struct nss_dp_data_plane_ctx *dpc, struct nss_dp_vp_tx_info *dptxi,
+					struct sk_buff *skb)
+{
+	return NETDEV_TX_OK;
+}

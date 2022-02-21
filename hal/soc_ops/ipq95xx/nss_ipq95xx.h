@@ -19,7 +19,9 @@
 #ifndef __NSS_DP_ARCH_H__
 #define __NSS_DP_ARCH_H__
 
+#define NSS_DP_VP_HAL_MAX_PORTS		1
 #define NSS_DP_HAL_MAX_PORTS		6
+#define NSS_DP_MAX_PORTS		(NSS_DP_HAL_MAX_PORTS + NSS_DP_VP_HAL_MAX_PORTS)
 #define NSS_DP_HAL_CPU_NUM		4
 #define NSS_DP_HAL_START_IFNUM		1
 

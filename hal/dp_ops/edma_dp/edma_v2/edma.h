@@ -42,6 +42,7 @@
 #define EDMA_DEVICE_NODE_NAME		"edma"
 #define EDMA_START_GMACS		NSS_DP_HAL_START_IFNUM
 #define EDMA_MAX_GMACS			NSS_DP_HAL_MAX_PORTS
+#define EDMA_MAX_PORTS			NSS_DP_MAX_PORTS
 #define EDMA_IRQ_NAME_SIZE		32
 #define EDMA_SC_BYPASS			1
 #define EDMA_NETDEV_FEATURES		NETIF_F_FRAGLIST \
@@ -169,7 +170,7 @@ struct edma_pcpu_stats {
  * EDMA private data structure
  */
 struct edma_gbl_ctx {
-	struct net_device *netdev_arr[EDMA_MAX_GMACS];
+	struct net_device *netdev_arr[EDMA_MAX_PORTS];
 			/* Net device for each GMAC port */
 	struct device_node *device_node;
 			/* Device tree node */

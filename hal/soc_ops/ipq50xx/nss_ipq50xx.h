@@ -20,6 +20,7 @@
 #define __NSS_DP_ARCH_H__
 
 #define NSS_DP_HAL_MAX_PORTS			2
+#define NSS_DP_MAX_PORTS			NSS_DP_HAL_MAX_PORTS
 #define NSS_DP_HAL_START_IFNUM			0
 
 /*

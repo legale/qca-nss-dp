@@ -26,9 +26,10 @@
 #define EDMA_TXDESC_PRI_DESC(R, i)	EDMA_GET_PDESC(R, i, struct edma_pri_txdesc)
 #define EDMA_TXDESC_SEC_DESC(R, i)	EDMA_GET_SDESC(R, i, struct edma_sec_txdesc)
 
-#define EDMA_MAX_TXCMPL_RINGS		32	/* Max TxCmpl rings */
 #define EDMA_MAX_TXDESC_RINGS		32	/* Max TxDesc rings */
-#define EDMA_TXCMPL_RING_PER_CORE_MAX	6
+#define EDMA_MAX_TXCMPL_RINGS		32	/* Max TxCmpl rings */
+#define EDMA_TXCMPL_RING_PER_CORE_MAX	EDMA_MAX_PORTS
+						/* Includes the one additional for VP */
 #define EDMA_TX_MAX_PRIORITY_LEVEL	1
 
 #define EDMA_TX_RING_SIZE		1024
@@ -36,7 +37,7 @@
 
 #define EDMA_TX_TSO_SEG_MAX		32	/* Max segment processing capacity of HW for TSO */
 
-#define EDMA_TX_RING_PER_CORE_MAX	(EDMA_TX_MAX_PRIORITY_LEVEL * EDMA_MAX_GMACS)
+#define EDMA_TX_RING_PER_CORE_MAX	(EDMA_TX_MAX_PRIORITY_LEVEL * EDMA_MAX_PORTS)
 
 #define EDMA_DST_PORT_TYPE		2
 #define EDMA_DST_PORT_TYPE_SHIFT	28

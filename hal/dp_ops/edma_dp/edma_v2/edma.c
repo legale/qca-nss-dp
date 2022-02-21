@@ -565,7 +565,7 @@ static int edma_of_get_pdata(struct resource *edma_res)
 	ret = of_property_read_u32_array(edma_gbl_ctx.device_node,
 			"qcom,txdesc-map",
 			(int32_t *)edma_gbl_ctx.tx_map,
-			(EDMA_MAX_GMACS * EDMA_TX_MAX_PRIORITY_LEVEL * NR_CPUS));
+			(EDMA_MAX_PORTS * EDMA_TX_MAX_PRIORITY_LEVEL * NR_CPUS));
 	if (ret) {
 		edma_err("Unable to read Tx map array. ret: %d\n", ret);
 		return -EINVAL;

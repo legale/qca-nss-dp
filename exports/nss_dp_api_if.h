@@ -2,6 +2,8 @@
  **************************************************************************
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
  *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all copies.
@@ -28,6 +30,10 @@
 #define __NSS_DP_API_IF_H
 
 #include "nss_dp_arch.h"
+
+#if defined(NSS_DP_VP_SUPPORT)
+#include <nss_dp_vp.h>
+#endif
 
 /**
  * @addtogroup nss_dp_subsystem
@@ -86,6 +92,9 @@ struct nss_dp_data_plane_ops {
 	int (*mac_addr)(struct nss_dp_data_plane_ctx *dpc, uint8_t *addr);
 	int (*change_mtu)(struct nss_dp_data_plane_ctx *dpc, uint32_t mtu);
 	netdev_tx_t (*xmit)(struct nss_dp_data_plane_ctx *dpc, struct sk_buff *os_buf);
+#if defined(NSS_DP_VP_SUPPORT)
+	netdev_tx_t (*vp_xmit)(struct nss_dp_data_plane_ctx *dpc, struct nss_dp_vp_tx_info *dptxi, struct sk_buff *skb);
+#endif
 	void (*set_features)(struct nss_dp_data_plane_ctx *dpc);
 	int (*pause_on_off)(struct nss_dp_data_plane_ctx *dpc,
 			    uint32_t pause_on);

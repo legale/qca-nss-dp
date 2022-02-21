@@ -32,6 +32,12 @@
 #define NSS_DP_ACL_DEV_ID 0
 
 /*
+ * Number of TX/RX queue supported
+ */
+#define NSS_DP_NETDEV_TX_QUEUE_NUM	NSS_DP_QUEUE_NUM
+#define NSS_DP_NETDEV_RX_QUEUE_NUM	NSS_DP_QUEUE_NUM
+
+/*
  * Rx buffer allocation size as per memory profile
  */
 #if (defined(NSS_DP_MEM_PROFILE_LOW) || defined(NSS_DP_MEM_PROFILE_MEDIUM)) && !defined(__LP64__)
@@ -83,6 +89,11 @@
 #define NSS_DP_TX_MITIGATION_PKT_CNT_DEF	16
 #define NSS_DP_RX_MITIGATION_TIMER_DEF		250
 #define NSS_DP_RX_MITIGATION_PKT_CNT_DEF	16
+
+/*
+ * Virtual Port dummy MAC ID
+ */
+#define NSS_DP_VP_MAC_ID		(NSS_DP_HAL_MAX_PORTS + 2)
 #endif
 
 struct nss_dp_global_ctx;
@@ -136,21 +147,21 @@ struct nss_dp_dev {
  * nss data plane global context
  */
 struct nss_dp_global_ctx {
-	struct nss_dp_dev *nss_dp[NSS_DP_HAL_MAX_PORTS];
+	struct nss_dp_dev *nss_dp[NSS_DP_MAX_PORTS];
 	struct nss_gmac_hal_ops *gmac_hal_ops[GMAC_HAL_TYPE_MAX];
 					/* GMAC HAL OPS */
 	bool common_init_done;		/* Flag to hold common init state */
 	uint8_t slowproto_acl_bm;	/* Port bitmap to allow slow protocol packets */
 	uint32_t rx_buf_size;		/* Buffer size to allocate */
-	uint32_t jumbo_mru;			/* Jumbo mru value for Rx processing */
+	uint32_t jumbo_mru;		/* Jumbo mru value for Rx processing */
 	bool overwrite_mode;		/* Overwrite mode for Rx processing */
-	bool page_mode;				/* Page mode for Rx processing */
+	bool page_mode;			/* Page mode for Rx processing */
 	bool tx_requeue_stop;		/* Disable queue stop for Tx processing */
 };
 
 /* Global data */
 extern struct nss_dp_global_ctx dp_global_ctx;
-extern struct nss_dp_data_plane_ctx dp_global_data_plane_ctx[NSS_DP_HAL_MAX_PORTS];
+extern struct nss_dp_data_plane_ctx dp_global_data_plane_ctx[NSS_DP_MAX_PORTS];
 extern int nss_dp_rx_napi_budget;
 extern int nss_dp_tx_napi_budget;
 
@@ -204,6 +215,28 @@ void nss_dp_set_ethtool_ops(struct net_device *netdev);
 #ifdef CONFIG_NET_SWITCHDEV
 void nss_dp_switchdev_setup(struct net_device *dev);
 bool nss_dp_is_phy_dev(struct net_device *dev);
+#endif
+
+/*
+ * nss_dp_get_idx_from_macid()
+ *	Get array index in data plane project from macid
+ *
+ * Note: We are not using MACID 7 for indexing.
+ */
+#if defined(NSS_DP_IPQ95XX)
+static inline uint32_t nss_dp_get_idx_from_macid(uint32_t macid)
+{
+	if (likely(macid < NSS_DP_VP_MAC_ID)) {
+		return (macid - 1);
+	}
+
+	return (macid - 2);
+}
+#else
+static inline uint32_t nss_dp_get_idx_from_macid(uint32_t macid)
+{
+	return (macid - 1);
+}
 #endif
 
 #endif	/* __NSS_DP_DEV_H__ */

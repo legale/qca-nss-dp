@@ -34,12 +34,6 @@
 
 #include "nss_dp_hal.h"
 
-/*
- * Number of TX/RX queue supported
- */
-#define NSS_DP_NETDEV_TX_QUEUE_NUM NSS_DP_QUEUE_NUM
-#define NSS_DP_NETDEV_RX_QUEUE_NUM NSS_DP_QUEUE_NUM
-
 /* ipq40xx_mdio_data */
 struct ipq40xx_mdio_data {
 	struct mii_bus *mii_bus;
@@ -49,7 +43,7 @@ struct ipq40xx_mdio_data {
 
 /* Global data */
 struct nss_dp_global_ctx dp_global_ctx;
-struct nss_dp_data_plane_ctx dp_global_data_plane_ctx[NSS_DP_HAL_MAX_PORTS];
+struct nss_dp_data_plane_ctx dp_global_data_plane_ctx[NSS_DP_MAX_PORTS];
 
 /* Module params */
 static int page_mode;
@@ -524,7 +518,7 @@ static u16 __attribute__((unused)) nss_dp_select_queue(struct net_device *netdev
 /*
  * Netdevice operations
  */
-static const struct net_device_ops nss_dp_netdev_ops = {
+struct net_device_ops nss_dp_netdev_ops = {
 	.ndo_open = nss_dp_open,
 	.ndo_stop = nss_dp_close,
 	.ndo_start_xmit = nss_dp_xmit,
@@ -779,7 +773,7 @@ static int32_t nss_dp_probe(struct platform_device *pdev)
 		goto fail;
 	}
 
-	dp_priv->dpc = &dp_global_data_plane_ctx[dp_priv->macid-1];
+	dp_priv->dpc = &dp_global_data_plane_ctx[nss_dp_get_idx_from_macid(dp_priv->macid)];
 	dp_priv->dpc->dev = netdev;
 	dp_priv->ctx = &dp_global_ctx;
 
@@ -872,7 +866,7 @@ static int32_t nss_dp_probe(struct platform_device *pdev)
 		goto phy_setup_fail;
 	}
 
-	dp_global_ctx.nss_dp[dp_priv->macid - 1] = dp_priv;
+	dp_global_ctx.nss_dp[nss_dp_get_idx_from_macid(dp_priv->macid)] = dp_priv;
 	dp_global_ctx.slowproto_acl_bm = 0;
 
 	netdev_dbg(netdev, "Init NSS DP GMAC%d (base = 0x%lx)\n", dp_priv->macid, netdev->base_addr);
@@ -890,6 +884,10 @@ fail:
 
 /*
  * nss_dp_remove()
+ *	Remove a dataplane port
+ *
+ * Note: We only remove the physical ports here. Virtual
+ * port devices are removed explicitly by the VP module.
  */
 static int nss_dp_remove(struct platform_device *pdev)
 {

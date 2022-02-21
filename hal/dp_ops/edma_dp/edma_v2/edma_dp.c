@@ -25,6 +25,10 @@
 #include "nss_dp_api_if.h"
 #include "nss_dp_dev.h"
 
+#if defined(NSS_DP_VP_SUPPORT)
+#include "edma_dp_vp.h"
+#endif
+
 /*
  * edma_dp_open()
  *	Do slow path data plane open
@@ -280,7 +284,7 @@ static int edma_dp_deinit(struct nss_dp_data_plane_ctx *dpc)
 	 * Free up resources used by EDMA if all the
 	 * interfaces have been overridden
 	 * */
-	if (edma_gbl_ctx.dp_override_cnt == EDMA_MAX_GMACS - 1) {
+	if (edma_gbl_ctx.dp_override_cnt == EDMA_MAX_PORTS - 1) {
 		edma_cleanup(true);
 	} else {
 		edma_gbl_ctx.dp_override_cnt++;
@@ -312,7 +316,7 @@ static int edma_dp_configure(struct net_device *netdev, uint32_t macid)
 		return -EINVAL;
 	}
 
-	if ((macid < EDMA_START_GMACS) || (macid > EDMA_MAX_GMACS)) {
+	if ((macid < EDMA_START_GMACS) || (macid > NSS_DP_VP_MAC_ID)) {
 		edma_err("nss_dp_edma: Invalid macid(%d) for %s\n",
 			macid, netdev->name);
 		return -EINVAL;
@@ -326,7 +330,7 @@ static int edma_dp_configure(struct net_device *netdev, uint32_t macid)
 	 * IPQ95xx. These begin from '1' and hence we subtract
 	 * one when using it as an array index.
 	 */
-	edma_gbl_ctx.netdev_arr[macid - 1] = netdev;
+	edma_gbl_ctx.netdev_arr[nss_dp_get_idx_from_macid(macid)] = netdev;
 
 	edma_cfg_tx_fill_per_port_tx_map(netdev, macid);
 
@@ -336,6 +340,7 @@ static int edma_dp_configure(struct net_device *netdev, uint32_t macid)
 
 	/*
 	 * TX/RX NAPI addition
+	 * Note: We do not support Rx for VPs dummy MACs.
 	 */
 	edma_cfg_rx_napi_add(&edma_gbl_ctx, netdev);
 	edma_cfg_tx_napi_add(&edma_gbl_ctx, netdev);
@@ -396,29 +401,31 @@ static int edma_dp_init(struct nss_dp_data_plane_ctx *dpc)
 		return NSS_DP_FAILURE;
 	}
 
-	/*
-	 * Allocate PPE interface global object which will hold various information
-	 * about the port allocated in a single global structure.
-	 */
-	iface = ppe_drv_iface_alloc(PPE_DRV_IFACE_TYPE_PHYSICAL, netdev);
-	if (!iface) {
-		netdev_err(netdev, "Error allocating PPE interface for dev(%p) dev-name %s\n",
-				netdev, netdev->name);
-		free_percpu(dp_dev->dp_info.pcpu_stats.rx_stats);
-		free_percpu(dp_dev->dp_info.pcpu_stats.tx_stats);
-		return NSS_DP_FAILURE;
-	}
+	if (dp_dev->macid < NSS_DP_VP_MAC_ID) {
+		/*
+		* Allocate PPE interface global object which will hold various information
+		* about the port allocated in a single global structure.
+		*/
+		iface = ppe_drv_iface_alloc(PPE_DRV_IFACE_TYPE_PHYSICAL, netdev);
+		if (!iface) {
+			netdev_err(netdev, "Error allocating PPE interface for dev(%p) dev-name %s\n",
+					netdev, netdev->name);
+			free_percpu(dp_dev->dp_info.pcpu_stats.rx_stats);
+			free_percpu(dp_dev->dp_info.pcpu_stats.tx_stats);
+			return NSS_DP_FAILURE;
+		}
 
-	/*
-	 * Initialize port allocated in PPE
-	 */
-	if (ppe_drv_dp_init(iface, dp_dev->macid) != PPE_DRV_RET_SUCCESS) {
-		netdev_err(netdev, "Error allocating PPE interface for dev(%p) dev-name %s\n",
-				netdev, netdev->name);
-		ppe_drv_iface_deref(iface);
-		free_percpu(dp_dev->dp_info.pcpu_stats.rx_stats);
-		free_percpu(dp_dev->dp_info.pcpu_stats.tx_stats);
-		return NSS_DP_FAILURE;
+		/*
+		* Initialize port allocated in PPE
+		*/
+		if (ppe_drv_dp_init(iface, dp_dev->macid) != PPE_DRV_RET_SUCCESS) {
+			netdev_err(netdev, "Error allocating PPE interface for dev(%p) dev-name %s\n",
+					netdev, netdev->name);
+			ppe_drv_iface_deref(iface);
+			free_percpu(dp_dev->dp_info.pcpu_stats.rx_stats);
+			free_percpu(dp_dev->dp_info.pcpu_stats.tx_stats);
+			return NSS_DP_FAILURE;
+		}
 	}
 
 	return NSS_DP_SUCCESS;
@@ -436,6 +443,9 @@ struct nss_dp_data_plane_ops nss_dp_edma_ops = {
 	.mac_addr	= edma_dp_mac_addr,
 	.change_mtu	= edma_dp_change_mtu,
 	.xmit		= edma_dp_xmit,
+#if defined(NSS_DP_VP_SUPPORT)
+	.vp_xmit	= edma_dp_vp_xmit,
+#endif
 	.set_features	= edma_dp_set_features,
 	.pause_on_off	= edma_dp_pause_on_off,
 	.get_stats	= edma_dp_get_ndo_stats,

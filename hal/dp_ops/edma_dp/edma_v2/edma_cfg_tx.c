@@ -289,7 +289,7 @@ void edma_cfg_tx_fill_per_port_tx_map(struct net_device *netdev, uint32_t macid)
 		uint32_t txdesc_ring_id;
 		uint32_t txdesc_start = edma_gbl_ctx.txdesc_ring_start;
 
-		txdesc_ring_id = edma_gbl_ctx.tx_map[macid - 1][i];
+		txdesc_ring_id = edma_gbl_ctx.tx_map[nss_dp_get_idx_from_macid(macid)][i];
 		txdesc_ring = &edma_gbl_ctx.txdesc_rings[txdesc_ring_id - txdesc_start];
 		dp_dev->dp_info.txr_map[0][i] = txdesc_ring;
 	}
@@ -421,8 +421,9 @@ static int edma_cfg_tx_rings_setup(struct edma_gbl_ctx *egc)
 
 	/*
 	 * Set Txdesc flow control group id
+	 * Note: Only valid for HAL Ports. Not valid for dummy ports
 	 */
-	for (i = 0; i < EDMA_TX_RING_PER_CORE_MAX; i++) {
+	for (i = 0; i < EDMA_MAX_GMACS; i++) {
 		for_each_possible_cpu(j) {
 			struct edma_txdesc_ring *txdesc_ring = NULL;
 			uint32_t txdesc_idx = egc->tx_map[i][j]
