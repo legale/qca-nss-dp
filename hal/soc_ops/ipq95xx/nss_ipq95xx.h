@@ -121,5 +121,8 @@ extern int32_t nss_dp_hal_clock_set_and_enable(struct device *dev, const char *i
 extern struct nss_dp_data_plane_ops nss_dp_edma_ops;
 extern int32_t nss_dp_hal_configure_clocks(void *ctx);
 extern int32_t nss_dp_hal_hw_reset(void *ctx);
+#ifdef NSS_DP_PPEDS_SUPPORT
+extern struct nss_dp_ppeds_ops edma_ppeds_ops;
+#endif
 
 #endif /* __NSS_DP_ARCH_H__ */

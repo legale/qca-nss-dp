@@ -677,6 +677,34 @@ static int edma_of_get_pdata(struct resource *edma_res)
 	}
 #endif
 
+#ifdef NSS_DP_PPEDS_SUPPORT
+	if (of_property_read_u32(edma_gbl_ctx.device_node, "qcom,ppeds-num",
+					&edma_gbl_ctx.ppeds_drv.num_nodes) != 0) {
+		edma_err("Unable to read number of PPE-DS nodes\n");
+		return -EINVAL;
+	}
+
+	if (edma_gbl_ctx.ppeds_drv.num_nodes > EDMA_PPEDS_MAX_NODES) {
+		edma_err("Invalid number of ppeds nodes (%d), maximum possible"
+				" ppeds node count is %u\n",
+				edma_gbl_ctx.ppeds_drv.num_nodes,
+				EDMA_PPEDS_MAX_NODES);
+		return -EINVAL;
+	}
+
+	edma_debug("PPE-DS num nodes: %d\n", edma_gbl_ctx.ppeds_drv.num_nodes);
+
+	if (edma_gbl_ctx.ppeds_drv.num_nodes > 0) {
+		ret = of_property_read_u32_array(edma_gbl_ctx.device_node,
+				"qcom,ppeds-map",
+				(int32_t *)edma_gbl_ctx.ppeds_node_map,
+				(edma_gbl_ctx.ppeds_drv.num_nodes * EDMA_PPEDS_NUM_ENTRY));
+		if (ret) {
+			edma_err("Unable to read PPE-DS map array. ret: %d\n", ret);
+			return -EINVAL;
+		}
+	}
+#endif
 	return 0;
 }
 
@@ -1102,6 +1130,14 @@ int edma_init(void)
 		goto edma_debugfs_init_fail;
 	}
 
+#ifdef NSS_DP_PPEDS_SUPPORT
+	if (edma_ppeds_init(&edma_gbl_ctx.ppeds_drv) != 0) {
+		edma_err("Error in edma ppeds initialization\n");
+		ret = -EFAULT;
+		goto edma_init_ppeds_init_fail;
+	}
+#endif
+
 	/*
 	 * Configure the EDMA common clocks
 	 */
@@ -1143,6 +1179,10 @@ int edma_init(void)
 	return 0;
 
 edma_hw_init_fail:
+#ifdef NSS_DP_PPEDS_SUPPORT
+	edma_ppeds_deinit(&edma_gbl_ctx.ppeds_drv);
+edma_init_ppeds_init_fail:
+#endif
 	edma_debugfs_exit();
 
 edma_debugfs_init_fail:
@@ -1213,6 +1253,46 @@ int edma_irq_init(void)
 	edma_debug("%s: misc IRQ:%u\n", (edma_gbl_ctx.device_node)->name,
 						edma_gbl_ctx.misc_intr);
 
+#ifdef NSS_DP_PPEDS_SUPPORT
+	/*
+	 * Get PPE-DS IRQ numbers
+	 */
+	for (i = 0; i < edma_gbl_ctx.ppeds_drv.num_nodes; i++) {
+		int32_t val;
+
+		entry_num++;
+		val = platform_get_irq(edma_gbl_ctx.pdev, entry_num);
+		if (val < 0) {
+			edma_err("%s: Invalid value: ppeds_txcomp_intr[%u]: %d\n",
+					(edma_gbl_ctx.device_node)->name, i, val);
+			return -1;
+		}
+		edma_gbl_ctx.ppeds_drv.ppeds_node_cfg[i].irq_map[EDMA_PPEDS_TXCOMP_IRQ_IDX] = val;
+
+		entry_num++;
+		val = platform_get_irq(edma_gbl_ctx.pdev, entry_num);
+		if (val < 0) {
+			edma_err("%s: Invalid value: ppeds_rxdesc_intr[%u]: %d\n",
+					(edma_gbl_ctx.device_node)->name, i, val);
+			return -1;
+		}
+		edma_gbl_ctx.ppeds_drv.ppeds_node_cfg[i].irq_map[EDMA_PPEDS_RXDESC_IRQ_IDX] = val;
+
+		entry_num++;
+		val = platform_get_irq(edma_gbl_ctx.pdev, entry_num);
+		if (val < 0) {
+			edma_err("%s: Invalid value: ppeds_rxfill_intr[%u]: %d\n",
+					(edma_gbl_ctx.device_node)->name, i, val);
+			return -1;
+		}
+		edma_gbl_ctx.ppeds_drv.ppeds_node_cfg[i].irq_map[EDMA_PPEDS_RXFILL_IRQ_IDX] = val;
+
+		edma_debug("PPE-DS IRQ: TxComplete: %d, Rx: %d, Rxfill: %d\n",
+			edma_gbl_ctx.ppeds_drv.ppeds_node_cfg[i].irq_map[EDMA_PPEDS_TXCOMP_IRQ_IDX],
+			edma_gbl_ctx.ppeds_drv.ppeds_node_cfg[i].irq_map[EDMA_PPEDS_RXDESC_IRQ_IDX],
+			edma_gbl_ctx.ppeds_drv.ppeds_node_cfg[i].irq_map[EDMA_PPEDS_RXFILL_IRQ_IDX]);
+	}
+#endif
 
 	/*
 	 * Request IRQ for Tx complete rings

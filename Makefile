@@ -60,6 +60,11 @@ qca-nss-dp-objs += nss_dp_vp_main.o \
 		   hal/dp_ops/edma_dp/edma_v2/edma_tx.o \
 		   hal/gmac_ops/qcom/qcom_if.o \
 		   hal/gmac_ops/syn/xgmac/syn_if.o
+
+ifeq ($(dp-ppe-ds),y)
+qca-nss-dp-objs += hal/dp_ops/edma_dp/edma_v2/edma_ppeds.o
+ccflags-y += -DNSS_DP_PPEDS_SUPPORT
+endif
 NSS_DP_INCLUDE += -I$(obj)/hal/dp_ops/edma_dp/edma_v2
 NSS_DP_INCLUDE += -I$(obj)/hal/dp_ops/edma_dp/edma_v2/include
 ccflags-y += -DNSS_DP_ENABLE_NAPI_GRO -DNSS_DP_VP_SUPPORT -DNSS_DP_EDMA_V2 -DNSS_DP_MAC_POLL_SUPPORT

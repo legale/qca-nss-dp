@@ -1004,3 +1004,28 @@ bool edma_rx_phy_tstamp_buf(__attribute__((unused))void *app_data, struct sk_buf
 
 	return false;
 }
+
+#ifdef NSS_DP_PPEDS_SUPPORT
+/*
+ * edma_rxfill_handle_irq()
+ *	Process RXFill IRQ and schedule napi
+ */
+irqreturn_t edma_rxfill_handle_irq(int irq, void *ctx)
+{
+	struct edma_rxfill_ring *rxfill_ring = (struct edma_rxfill_ring *)ctx;
+
+	edma_debug("irq: irq=%d rxfill_ring_id=%u\n", irq, rxfill_ring->ring_id);
+
+	if (likely(napi_schedule_prep(&rxfill_ring->napi))) {
+
+		/*
+		 * Disable Rxfill interrupt
+		 */
+		edma_reg_write(EDMA_REG_RXFILL_INT_MASK(rxfill_ring->ring_id),
+							EDMA_MASK_INT_DISABLE);
+		__napi_schedule(&rxfill_ring->napi);
+	}
+
+	return IRQ_HANDLED;
+}
+#endif

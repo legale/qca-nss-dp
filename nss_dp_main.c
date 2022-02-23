@@ -992,6 +992,16 @@ int32_t nss_dp_get_port_num(struct net_device *netdev)
 EXPORT_SYMBOL(nss_dp_get_port_num);
 
 /*
+ * nss_dp_ppeds_get_ops()
+ *	API to get PPE-DS operations
+ */
+struct nss_dp_ppeds_ops *nss_dp_ppeds_get_ops(void)
+{
+	return nss_dp_ppeds_ops_get();
+}
+EXPORT_SYMBOL(nss_dp_ppeds_get_ops);
+
+/*
  * nss_dp_init()
  */
 int __init nss_dp_init(void)

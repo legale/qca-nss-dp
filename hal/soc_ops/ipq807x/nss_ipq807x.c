@@ -63,3 +63,12 @@ void nss_dp_hal_cleanup(void)
 	nss_dp_hal_set_gmac_ops(NULL, GMAC_HAL_TYPE_SYN_XGMAC);
 	edma_cleanup(false);
 }
+
+/*
+ * nss_dp_ppeds_ops_get()
+ *	API to get PPE-DS operations
+ */
+struct nss_dp_ppeds_ops *nss_dp_ppeds_ops_get(void)
+{
+	return NULL;
+}

@@ -25,6 +25,9 @@
 #include <nss_dp_hal_if.h>
 #include "edma_rx.h"
 #include "edma_tx.h"
+#ifdef NSS_DP_PPEDS_SUPPORT
+#include "edma_ppeds_priv.h"
+#endif
 
 /*
  * The driver uses kernel DMA constructs that assume an architecture
@@ -288,6 +291,11 @@ struct edma_gbl_ctx {
 			/* Flag to check initialization status */
 	uint32_t rx_ring_queue_map[EDMA_MAX_PRI_PER_CORE][NR_CPUS];
 			/* Rx ring to queue mapping */
+#ifdef NSS_DP_PPEDS_SUPPORT
+	uint32_t ppeds_node_map[EDMA_PPEDS_MAX_NODES][EDMA_PPEDS_NUM_ENTRY];
+	struct edma_ppeds_drv ppeds_drv;
+			/* PPE-DS nodes information */
+#endif
 };
 
 extern struct edma_gbl_ctx edma_gbl_ctx;
