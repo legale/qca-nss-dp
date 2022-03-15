@@ -21,6 +21,7 @@
 #include <linux/netdevice.h>
 #include <ppe_drv_public.h>
 #include <nss_dp_vp.h>
+#include <linux/phy.h>
 #include "edma.h"
 #include "edma_debug.h"
 #include "edma_regs.h"
@@ -928,4 +929,30 @@ irqreturn_t edma_rx_handle_irq(int irq, void *ctx)
 	}
 
 	return IRQ_HANDLED;
+}
+
+/*
+ * edma_rx_phy_tstamp_buf()
+ *	Receive skb for PHY timestamping
+ */
+bool edma_rx_phy_tstamp_buf(__attribute__((unused))void *app_data, struct sk_buff *skb)
+{
+	struct net_device *ndev = skb->dev;
+
+	/*
+	 * The PTP_CLASS_ value 0 is passed to phy driver, which will be
+	 * set to the correct PTP class value by calling ptp_classify_raw
+	 * in drv->rxtstamp function.
+	 */
+	if (ndev && ndev->phydev && ndev->phydev->drv && ndev->phydev->drv->rxtstamp) {
+		skb->protocol = eth_type_trans(skb, ndev);
+
+		if (likely(ndev->phydev->drv->rxtstamp(ndev->phydev, skb, 0))) {
+			return true;
+		} else {
+			__skb_push(skb, ETH_HLEN);
+		}
+	}
+
+	return false;
 }
