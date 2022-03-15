@@ -376,13 +376,6 @@ static inline bool edma_rx_handle_linear_packets(struct edma_gbl_ctx *egc,
 	rx_stats = this_cpu_ptr(pcpu_stats->rx_stats);
 
 	/*
-	 * Check Rx checksum offload status.
-	 */
-	if (likely(skb->dev->features & NETIF_F_RXCSUM)) {
-		edma_rx_checksum_verify(rxdesc_desc, skb);
-	}
-
-	/*
 	 * Get packet length
 	 */
 	pkt_length = EDMA_RXDESC_PACKET_LEN_GET(rxdesc_desc);
@@ -394,9 +387,8 @@ static inline bool edma_rx_handle_linear_packets(struct edma_gbl_ctx *egc,
 		 */
 		dmac_inv_range((void *)skb->data,
 				(void *)(skb->data + pkt_length));
-
+		prefetch(skb->data);
 		skb_put(skb, pkt_length);
-		skb->protocol = eth_type_trans(skb, skb->dev);
 		goto send_to_stack;
 	}
 
@@ -418,9 +410,13 @@ static inline bool edma_rx_handle_linear_packets(struct edma_gbl_ctx *egc,
 		return false;
 	}
 
-	skb->protocol = eth_type_trans(skb, skb->dev);
-
 send_to_stack:
+	/*
+	 * Check Rx checksum offload status.
+	 */
+	if (likely(skb->dev->features & NETIF_F_RXCSUM)) {
+		edma_rx_checksum_verify(rxdesc_desc, skb);
+	}
 
 	/*
 	 * TODO: Do a batched update of the stats per netdevice.
@@ -433,6 +429,8 @@ send_to_stack:
 
 	edma_debug("edma_gbl_ctx:%px, skb:%px pkt_length:%u\n",
 			egc, skb, skb->len);
+
+	skb->protocol = eth_type_trans(skb, skb->dev);
 
 	/*
 	 * Send packet upto network stack
@@ -453,11 +451,12 @@ send_to_stack:
 static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 				struct edma_rxdesc_ring *rxdesc_ring)
 {
-	struct edma_rxdesc_desc *rxdesc_desc, *next_rxdesc_desc;
+	struct edma_rxdesc_desc *next_rxdesc_desc;
 	struct edma_rx_desc_stats *rxdesc_stats = &rxdesc_ring->rx_desc_stats;
 	uint32_t work_to_do, work_done = 0;
 	uint32_t work_leftover;
 	uint16_t prod_idx, cons_idx, end_idx;
+	struct sk_buff *next_skb;
 
 	/*
 	 * Get Rx ring producer and consumer indices
@@ -500,18 +499,20 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 
 	dsb(st);
 
+	/*
+	 * Get opaque from RXDESC
+	 */
+	next_skb = (struct sk_buff *)EDMA_RXDESC_OPAQUE_GET(next_rxdesc_desc);
+
 	work_leftover = work_to_do & (EDMA_RX_MAX_PROCESS - 1);
 	while (likely(work_to_do--)) {
+		struct edma_rxdesc_desc *rxdesc_desc;
 		struct net_device *ndev;
 		struct sk_buff *skb;
 		uint32_t src_port_num;
 
+		skb = next_skb;
 		rxdesc_desc = next_rxdesc_desc;
-
-		/*
-		 * Get opaque from RXDESC
-		 */
-		skb = (struct sk_buff *)EDMA_RXDESC_OPAQUE_GET(rxdesc_desc);
 
 		/*
 		 * Update consumer index
@@ -604,6 +605,13 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 			 * Handle linear packets
 			 */
 			if (likely(!EDMA_RXDESC_MORE_BIT_GET(rxdesc_desc))) {
+
+				/*
+				 * Prefetch the next skb.
+				 */
+				next_skb = (struct sk_buff *)EDMA_RXDESC_OPAQUE_GET(next_rxdesc_desc);
+				prefetch(next_skb);
+
 				if (unlikely(!edma_rx_handle_linear_packets(egc, rxdesc_ring, rxdesc_desc, skb))) {
 					dev_kfree_skb_any(skb);
 				}
@@ -611,6 +619,12 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 				goto next_rx_desc;
 			}
 		}
+
+		/*
+		 * Prefetch the next skb.
+		 */
+		next_skb = (struct sk_buff *)EDMA_RXDESC_OPAQUE_GET(next_rxdesc_desc);
+		prefetch(next_skb);
 
 		/*
 		 * Handle scatter frame processing for first/middle/last segments
