@@ -35,6 +35,11 @@ uint32_t edma_cfg_rx_queue_tail_drop_enable = EDMA_RX_QUEUE_TAIL_DROP_ENABLE;
 uint32_t edma_cfg_rx_rps_num_cores = NR_CPUS;
 
 /*
+ * Rx ring queue offset
+ */
+#define EDMA_QUEUE_OFFSET(q_id)	(q_id / EDMA_MAX_PRI_PER_CORE)
+
+/*
  * edma_cfg_rx_fill_ring_cleanup()
  *	Cleanup resources for one RxFill ring
  *
@@ -235,41 +240,26 @@ static int32_t edma_cfg_rx_desc_ring_reset_queue_priority(struct edma_gbl_ctx *e
 				uint32_t rxdesc_ring_idx)
 {
 	fal_qos_scheduler_cfg_t qsch;
-	uint32_t i, queue_id, bit_set, port_id, cur_queue_word;
+	uint32_t i, queue_id, port_id;
 
-	for (i = 0; i < EDMA_RING_MAPPED_QUEUE_BM_WORD_COUNT; i++) {
-		cur_queue_word = egc->rxdesc_ring_to_queue_bm[rxdesc_ring_idx][i];
-		if (cur_queue_word == 0) {
-			continue;
+	for (i = 0; i < EDMA_MAX_PRI_PER_CORE; i++) {
+		queue_id = egc->rx_ring_queue_map[i][rxdesc_ring_idx];
+
+		memset(&qsch, 0, sizeof(fal_qos_scheduler_cfg_t));
+		if (fal_queue_scheduler_get(EDMA_SWITCH_DEV_ID, queue_id,
+					EDMA_PPE_QUEUE_LEVEL, &port_id, &qsch) != SW_OK) {
+			edma_err("Error in getting %u queue's priority information\n", queue_id);
+			return -1;
 		}
 
-		do {
-			bit_set = ffs((uint32_t)cur_queue_word);
-			queue_id = (((i * EDMA_BITS_IN_WORD) + bit_set) - 1);
-			memset(&qsch, 0, sizeof(fal_qos_scheduler_cfg_t));
-			if (fal_queue_scheduler_get(EDMA_SWITCH_DEV_ID, queue_id,
-						EDMA_PPE_QUEUE_LEVEL, &port_id, &qsch) != SW_OK) {
-				edma_err("Error in getting %u queue's priority information\n", queue_id);
-				return -1;
-			}
+		qsch.e_pri = i;
+		qsch.c_pri = i;
 
-			/*
-			 * Configure the default queue priority.
-			 * In IPQ95xx, currently single queue is being mapped to the
-			 * single Rx descriptor ring and each ring will be processed
-			 * on the separate core. Therefore assigning same priority to
-			 * all these mapped queues.
-			 */
-			qsch.e_pri = EDMA_RX_DEFAULT_QUEUE_PRI;
-			qsch.c_pri = EDMA_RX_DEFAULT_QUEUE_PRI;
-			if (fal_queue_scheduler_set(EDMA_SWITCH_DEV_ID, queue_id,
-						EDMA_PPE_QUEUE_LEVEL, port_id, &qsch) != SW_OK) {
-				edma_err("Error in resetting %u queue's priority\n", queue_id);
-				return -1;
-			}
-
-			cur_queue_word &= ~(1 << (bit_set - 1));
-		} while (cur_queue_word);
+		if (fal_queue_scheduler_set(EDMA_SWITCH_DEV_ID, queue_id,
+					EDMA_PPE_QUEUE_LEVEL, port_id, &qsch) != SW_OK) {
+			edma_err("Error in resetting %u queue's priority\n", queue_id);
+			return -1;
+		}
 	}
 
 	return 0;
@@ -282,6 +272,11 @@ static int32_t edma_cfg_rx_desc_ring_reset_queue_priority(struct edma_gbl_ctx *e
 static int32_t edma_cfg_rx_desc_ring_reset_queue_config(struct edma_gbl_ctx *egc)
 {
 	int32_t i;
+
+	if (unlikely(egc->num_rxdesc_rings > NR_CPUS)) {
+		edma_err("Invalid count of rxdesc rings: %d\n", egc->num_rxdesc_rings);
+		return -1;
+	}
 
 	/*
 	 * Unmap Rxdesc ring to PPE queue mapping to reset its backpressure configuration
@@ -538,7 +533,7 @@ static void edma_cfg_rx_desc_ring_flow_control(uint32_t threshold_xoff, uint32_t
 static int32_t edma_cfg_rx_mapped_queue_ac_fc_configure(uint16_t threshold,
 				uint32_t enable)
 {
-	uint32_t i, j, cur_queue_word, bit_set, queue_id;
+	uint32_t i, j, queue_id;
 	fal_ac_dynamic_threshold_t cfg;
 	fal_ac_obj_t obj;
 	fal_ac_ctrl_t ac_ctrl;
@@ -549,64 +544,54 @@ static int32_t edma_cfg_rx_mapped_queue_ac_fc_configure(uint16_t threshold,
 
 		rxdesc_ring = &edma_gbl_ctx.rxdesc_rings[i];
 
-		for (j = 0; j < EDMA_RING_MAPPED_QUEUE_BM_WORD_COUNT; j++) {
-			cur_queue_word = edma_gbl_ctx.rxdesc_ring_to_queue_bm[i][j];
-			if (cur_queue_word == 0) {
-				continue;
+		for (j = 0; j < EDMA_MAX_PRI_PER_CORE; j++) {
+			queue_id = edma_gbl_ctx.rx_ring_queue_map[j][i];
+
+			/*
+			 * Configure the mapped queues AC FC configuration threshold
+			 */
+			memset(&cfg, 0, sizeof(fal_ac_dynamic_threshold_t));
+			if (fal_ac_dynamic_threshold_get(EDMA_SWITCH_DEV_ID,
+				queue_id, &cfg) != SW_OK) {
+				edma_err("Error in getting %d queue's AC FC threshold\n",
+						queue_id);
+				return -1;
 			}
 
-			do {
-				bit_set = ffs((uint32_t)cur_queue_word);
-				queue_id = (((j * EDMA_BITS_IN_WORD) + bit_set) - 1);
-
-				/*
-				 * Configure the mapped queues AC FC configuration threshold
-				 */
-				memset(&cfg, 0, sizeof(fal_ac_dynamic_threshold_t));
-				if (fal_ac_dynamic_threshold_get(EDMA_SWITCH_DEV_ID,
+			/*
+			 * TODO:
+			 * Check if the threshold configuration can be done
+			 * once the time of initialization and then later the AC
+			 * FC configuration can be enabled/disabled from this API
+			 * or not.
+			 */
+			cfg.ceiling = threshold;
+			if (fal_ac_dynamic_threshold_set(EDMA_SWITCH_DEV_ID,
 					queue_id, &cfg) != SW_OK) {
-					edma_err("Error in getting %d queue's AC FC threshold\n",
-							queue_id);
-					return -1;
-				}
+				edma_err("Error in configuring queue(%d) threshold"
+						" value:%d\n", queue_id, threshold);
+				return -1;
+			}
 
-				/*
-				 * TODO:
-				 * Check if the threshold configuration can be done
-				 * once the time of initialization and then later the AC
-				 * FC configuration can be enabled/disabled from this API
-				 * or not.
-				 */
-				cfg.ceiling = threshold;
-				if (fal_ac_dynamic_threshold_set(EDMA_SWITCH_DEV_ID,
-						queue_id, &cfg) != SW_OK) {
-					edma_err("Error in configuring queue(%d) threshold"
-							" value:%d\n", queue_id, threshold);
-					return -1;
-				}
+			/*
+			 * Enable/disable the state of mapped queues AC FC configuration
+			 */
+			memset(&obj, 0, sizeof(fal_ac_obj_t));
+			memset(&ac_ctrl, 0, sizeof(fal_ac_ctrl_t));
+			obj.type = FAL_AC_QUEUE;
+			obj.obj_id = queue_id;
+			if (fal_ac_ctrl_get(EDMA_SWITCH_DEV_ID, &obj, &ac_ctrl) != SW_OK) {
+				edma_err("Error in getting %d queue's AC configuration\n",
+						obj.obj_id);
+				return -1;
+			}
 
-				/*
-				 * Enable/disable the state of mapped queues AC FC configuration
-				 */
-				memset(&obj, 0, sizeof(fal_ac_obj_t));
-				memset(&ac_ctrl, 0, sizeof(fal_ac_ctrl_t));
-				obj.type = FAL_AC_QUEUE;
-				obj.obj_id = queue_id;
-				if (fal_ac_ctrl_get(EDMA_SWITCH_DEV_ID, &obj, &ac_ctrl) != SW_OK) {
-					edma_err("Error in getting %d queue's AC configuration\n",
-							obj.obj_id);
-					return -1;
-				}
-
-				ac_ctrl.ac_fc_en = is_enable;
-				if (fal_ac_ctrl_set(EDMA_SWITCH_DEV_ID, &obj, &ac_ctrl) != SW_OK) {
-					edma_err("Error in changing queue's ac_fc state:%d"
-							" for queue:%d", is_enable, obj.obj_id);
-					return -1;
-				}
-
-				cur_queue_word &= ~(1 << (bit_set - 1));
-			} while (cur_queue_word);
+			ac_ctrl.ac_fc_en = is_enable;
+			if (fal_ac_ctrl_set(EDMA_SWITCH_DEV_ID, &obj, &ac_ctrl) != SW_OK) {
+				edma_err("Error in changing queue's ac_fc state:%d"
+						" for queue:%d", is_enable, obj.obj_id);
+				return -1;
+			}
 		}
 	}
 
@@ -784,8 +769,9 @@ static void edma_cfg_rx_point_offload_rings_to_rx_fill_mapping(struct edma_gbl_c
  */
 static void edma_cfg_rx_qid_to_rx_desc_ring_mapping(struct edma_gbl_ctx *egc)
 {
-	uint32_t desc_index, i;
+	uint32_t desc_index, q_id;
 	uint32_t reg_index, data;
+	uint32_t ring_index;
 
 	/*
 	 * Set PPE QID to EDMA Rx ring mapping.
@@ -794,30 +780,33 @@ static void edma_cfg_rx_qid_to_rx_desc_ring_mapping(struct edma_gbl_ctx *egc)
 	 */
 	desc_index = (egc->rxdesc_ring_start & EDMA_RX_RING_ID_MASK);
 
-	for (i = EDMA_PORT_QUEUE_START;
-		i <= EDMA_PORT_QUEUE_END;
-			i += EDMA_QID2RID_NUM_PER_REG) {
-		reg_index = i/EDMA_QID2RID_NUM_PER_REG;
-		data = EDMA_RX_RING_ID_QUEUE0_SET(desc_index) |
-			EDMA_RX_RING_ID_QUEUE1_SET(desc_index + 1) |
-			EDMA_RX_RING_ID_QUEUE2_SET(desc_index + 2) |
-			EDMA_RX_RING_ID_QUEUE3_SET(desc_index + 3);
+	/*
+	 * Here map all the queues to ring.
+	 */
+	for (q_id = EDMA_CPU_PORT_QUEUE_START;
+		q_id <= EDMA_CPU_PORT_QUEUE_MAX;
+			q_id += EDMA_QID2RID_NUM_PER_REG) {
+		reg_index = q_id/EDMA_QID2RID_NUM_PER_REG;
+		ring_index = desc_index + EDMA_QUEUE_OFFSET(q_id);
+
+		data = EDMA_RX_RING_ID_QUEUE0_SET(ring_index) |
+			EDMA_RX_RING_ID_QUEUE1_SET(ring_index) |
+			EDMA_RX_RING_ID_QUEUE2_SET(ring_index) |
+			EDMA_RX_RING_ID_QUEUE3_SET(ring_index);
 
 		edma_reg_write(EDMA_QID2RID_TABLE_MEM(reg_index), data);
-		desc_index += EDMA_QID2RID_NUM_PER_REG;
-
-		edma_debug("Configure QID2RID(%d) reg:0x%x to 0x%x\n",
-				i, EDMA_QID2RID_TABLE_MEM(reg_index), data);
+		edma_info("Configure QID2RID(%d) reg:0x%x to 0x%x, desc_index: %d, reg_index: %d\n",
+				q_id, EDMA_QID2RID_TABLE_MEM(reg_index), data, desc_index, reg_index);
 	}
 
 	/*
 	 * Map PPE multicast queues to the first Rx ring.
 	 */
 	desc_index = (egc->rxdesc_ring_start & EDMA_RX_RING_ID_MASK);
-	for (i = EDMA_CPU_PORT_MC_QID_MIN;
-		i <= EDMA_CPU_PORT_MC_QID_MAX;
-			i += EDMA_QID2RID_NUM_PER_REG) {
-		reg_index = i/EDMA_QID2RID_NUM_PER_REG;
+	for (q_id = EDMA_CPU_PORT_MCAST_QUEUE_START;
+		q_id <= EDMA_CPU_PORT_MCAST_QUEUE_END;
+			q_id += EDMA_QID2RID_NUM_PER_REG) {
+		reg_index = q_id/EDMA_QID2RID_NUM_PER_REG;
 		data = EDMA_RX_RING_ID_QUEUE0_SET(desc_index) |
 			EDMA_RX_RING_ID_QUEUE1_SET(desc_index) |
 			EDMA_RX_RING_ID_QUEUE2_SET(desc_index) |
@@ -826,7 +815,7 @@ static void edma_cfg_rx_qid_to_rx_desc_ring_mapping(struct edma_gbl_ctx *egc)
 		edma_reg_write(EDMA_QID2RID_TABLE_MEM(reg_index), data);
 
 		edma_debug("Configure QID2RID(%d) reg:0x%x to 0x%x\n",
-				i, EDMA_QID2RID_TABLE_MEM(reg_index), data);
+				q_id, EDMA_QID2RID_TABLE_MEM(reg_index), data);
 	}
 }
 
@@ -961,7 +950,7 @@ void edma_cfg_rx_mapping(struct edma_gbl_ctx *egc)
  */
 void edma_cfg_rx_point_offload_mapping(struct edma_gbl_ctx *egc)
 {
-	uint32_t queue_id = EDMA_PORT_QUEUE_START;
+	uint32_t queue_id = EDMA_CPU_PORT_QUEUE_START;
 	uint32_t word_idx, bit_idx;
 
 	/*
@@ -993,8 +982,7 @@ void edma_cfg_rx_point_offload_mapping(struct edma_gbl_ctx *egc)
  */
 static int edma_cfg_rx_rings_setup(struct edma_gbl_ctx *egc)
 {
-	uint32_t queue_id = EDMA_PORT_QUEUE_START;
-	int32_t i, alloc_size, buf_len;
+	int32_t ring_idx, alloc_size, buf_len, pri_idx;
 
 	/*
 	 * Set buffer allocation size
@@ -1015,13 +1003,13 @@ static int edma_cfg_rx_rings_setup(struct edma_gbl_ctx *egc)
 	/*
 	 * Allocate Rx fill ring descriptors
 	 */
-	for (i = 0; i < egc->num_rxfill_rings; i++) {
+	for (ring_idx = 0; ring_idx < egc->num_rxfill_rings; ring_idx++) {
 		int32_t ret;
 		struct edma_rxfill_ring *rxfill_ring = NULL;
 
-		rxfill_ring = &egc->rxfill_rings[i];
+		rxfill_ring = &egc->rxfill_rings[ring_idx];
 		rxfill_ring->count = EDMA_RX_RING_SIZE;
-		rxfill_ring->ring_id = egc->rxfill_ring_start + i;
+		rxfill_ring->ring_id = egc->rxfill_ring_start + ring_idx;
 		rxfill_ring->alloc_size = alloc_size;
 		rxfill_ring->buf_len = buf_len;
 		rxfill_ring->page_mode = egc->rx_page_mode;
@@ -1030,9 +1018,9 @@ static int edma_cfg_rx_rings_setup(struct edma_gbl_ctx *egc)
 		if (ret != 0) {
 			edma_err("Error in setting up %d rxfill ring. ret: %d",
 					 rxfill_ring->ring_id, ret);
-			while (--i >= 0) {
+			while (--ring_idx >= 0) {
 				edma_cfg_rx_fill_ring_cleanup(egc,
-					&egc->rxfill_rings[i]);
+					&egc->rxfill_rings[ring_idx]);
 			}
 
 			return -ENOMEM;
@@ -1042,53 +1030,49 @@ static int edma_cfg_rx_rings_setup(struct edma_gbl_ctx *egc)
 	/*
 	 * Allocate RxDesc ring descriptors
 	 */
-	for (i = 0; i < egc->num_rxdesc_rings; i++) {
-		uint32_t index, word_idx, bit_idx;
+	for (ring_idx = 0; ring_idx < egc->num_rxdesc_rings; ring_idx++) {
+		uint32_t index, word_idx, queue_id = EDMA_CPU_PORT_QUEUE_START;
 		int32_t ret;
 		struct edma_rxdesc_ring *rxdesc_ring = NULL;
 
-		rxdesc_ring = &egc->rxdesc_rings[i];
+		rxdesc_ring = &egc->rxdesc_rings[ring_idx];
 		rxdesc_ring->count = EDMA_RX_RING_SIZE;
-		rxdesc_ring->ring_id = egc->rxdesc_ring_start + i;
+		rxdesc_ring->ring_id = egc->rxdesc_ring_start + ring_idx;
 
-		if (queue_id > EDMA_PORT_QUEUE_END) {
+		if (queue_id > EDMA_CPU_PORT_QUEUE_MAX) {
 			edma_err("Invalid queue_id: %d\n", queue_id);
-			while (--i >= 0) {
-				edma_cfg_rx_desc_ring_cleanup(egc, &egc->rxdesc_rings[i]);
+			while (--ring_idx >= 0) {
+				edma_cfg_rx_desc_ring_cleanup(egc, &egc->rxdesc_rings[ring_idx]);
 			}
 
 			goto rxdesc_mem_alloc_fail;
 		}
 
-		/*
-		 * MAP Rx descriptor ring to PPE queues.
-		 *
-		 * TODO:
-		 * Currently one Rx descriptor ring can get mapped to only
-		 * single PPE queue. Multiple queues getting mapped to the
-		 * single Rx descriptor ring is not yet supported.
-		 * In future, we can support this by getting the Rx descriptor
-		 * ring to queue mapping from the dtsi.
-		 */
-		word_idx = (queue_id / (EDMA_BITS_IN_WORD - 1));
-		bit_idx = (queue_id % EDMA_BITS_IN_WORD);
-		egc->rxdesc_ring_to_queue_bm[i][word_idx] = 1 << bit_idx;
-		queue_id++;
+		for (pri_idx = 0; pri_idx < EDMA_MAX_PRI_PER_CORE; pri_idx++) {
+			queue_id = egc->rx_ring_queue_map[pri_idx][ring_idx];
+			word_idx = (queue_id / EDMA_BITS_IN_WORD);
+
+			/*
+			 * To-do: Use ring queue map from dtsi to build a bitmap
+			 */
+			egc->rxdesc_ring_to_queue_bm[ring_idx][word_idx] |= 1 << queue_id;
+			edma_debug("Queue_id: %d, ring_id: %d\n", queue_id, ring_idx);
+		}
 
 		/*
 		 * Create a mapping between RX Desc ring and Rx fill ring.
 		 * Number of fill rings are lesser than the descriptor rings
 		 * Share the fill rings across descriptor rings.
 		 */
-		index = egc->rxfill_ring_start + (i % egc->num_rxfill_rings);
+		index = egc->rxfill_ring_start + (ring_idx % egc->num_rxfill_rings);
 		rxdesc_ring->rxfill = &egc->rxfill_rings[index - egc->rxfill_ring_start];
 
 		ret = edma_cfg_rx_desc_ring_setup(rxdesc_ring);
 		if (ret != 0) {
 			edma_err("Error in setting up %d rxdesc ring. ret: %d",
 					 rxdesc_ring->ring_id, ret);
-			while (--i >= 0) {
-				edma_cfg_rx_desc_ring_cleanup(egc, &egc->rxdesc_rings[i]);
+			while (--ring_idx >= 0) {
+				edma_cfg_rx_desc_ring_cleanup(egc, &egc->rxdesc_rings[ring_idx]);
 			}
 
 			goto rxdesc_mem_alloc_fail;
@@ -1100,8 +1084,8 @@ static int edma_cfg_rx_rings_setup(struct edma_gbl_ctx *egc)
 	return 0;
 
 rxdesc_mem_alloc_fail:
-	for (i = 0; i < egc->num_rxfill_rings; i++) {
-		edma_cfg_rx_fill_ring_cleanup(egc, &egc->rxfill_rings[i]);
+	for (ring_idx = 0; ring_idx < egc->num_rxfill_rings; ring_idx++) {
+		edma_cfg_rx_fill_ring_cleanup(egc, &egc->rxfill_rings[ring_idx]);
 	}
 
 	return -ENOMEM;
@@ -1155,7 +1139,7 @@ int32_t edma_cfg_rx_rings_alloc(struct edma_gbl_ctx *egc)
 		(egc->rxfill_ring_start + egc->num_rxfill_rings - 1));
 
 	egc->rxdesc_ring_to_queue_bm = kzalloc(egc->num_rxdesc_rings * sizeof(uint32_t) * \
-			 EDMA_RING_MAPPED_QUEUE_BM_WORD_COUNT, GFP_KERNEL);
+			EDMA_RING_MAPPED_QUEUE_BM_WORD_COUNT, GFP_KERNEL);
 	if (!egc->rxdesc_ring_to_queue_bm) {
 		edma_err("Error in allocating mapped queue area for Rxdesc rings\n");
 		goto rx_rings_mapped_queue_alloc_failed;

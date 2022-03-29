@@ -98,6 +98,13 @@ MODULE_PARM_DESC(nss_dp_rx_mitigation_timer, "Rx mitigation timer value in micro
 int nss_dp_rx_mitigation_pkt_cnt = NSS_DP_RX_MITIGATION_PKT_CNT_DEF;
 module_param(nss_dp_rx_mitigation_pkt_cnt, int, S_IRUGO);
 MODULE_PARM_DESC(nss_dp_rx_mitigation_pkt_cnt, "Rx mitigation packet count value");
+
+/*
+ * Module parameter for priority mapping
+ */
+uint8_t nss_dp_pri_map[EDMA_PRI_MAX] = {0, 1, 2, 3, 4, 5, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7};
+module_param_array(nss_dp_pri_map, byte, NULL, S_IRUGO);
+MODULE_PARM_DESC(nss_dp_pri_map, "Priority to multi-queue mapping");
 #endif
 
 /*

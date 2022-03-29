@@ -55,11 +55,62 @@
 #define EDMA_BITS_IN_WORD	32
 
 /*
+ * Maximum queue priority
+ */
+#define EDMA_PRI_MAX		16
+
+/*
+ * Maximum queue priority supported per core
+ */
+#define EDMA_MAX_PRI_PER_CORE	8
+
+/*
  * Bitmap for ring to PPE queue's mapping.
  *
  * A bitmap for 300 PPE queues requires 10 32bit integers
  */
 #define EDMA_RING_MAPPED_QUEUE_BM_WORD_COUNT	10
+
+/*
+ * QID to RID Table
+ */
+#define EDMA_QID2RID_TABLE_MEM(q)	(0xb9000 + (0x4 * (q)))
+
+/*
+ * edma_port_ucast_queues
+ * 	EDMA unicast queue number
+ * To-do: read queue start from dtsi
+ */
+enum edma_port_ucast_queues {
+	EDMA_CPU_PORT_QUEUE_START = 0,
+	EDMA_CPU_PORT_QUEUE_MAX = 31,
+};
+
+/*
+ * edma_cpu_port_mcast_queues
+ * 	EDMA multicast queue number
+ */
+enum edma_cpu_port_mcast_queues {
+	EDMA_CPU_PORT_MCAST_QUEUE_START = 256,
+	EDMA_CPU_PORT_MCAST_QUEUE_END = 271,
+};
+
+/*
+ * EDMA profile ID
+ *
+ * To-do: Use enum once ppe-drv introduces profile id enum.
+ */
+#define EDMA_CPU_PORT_PROFILE_ID	0
+
+/*
+ * EDMA maximum RSS hash
+ */
+#define EDMA_RSS_HASH_MAX	256
+
+/*
+ * EDMA QID2RID configuration
+ */
+#define EDMA_QID2RID_NUM_PER_REG	4
 
 /*
  * EDMA clock frequency: 352 MHZ
@@ -235,6 +286,8 @@ struct edma_gbl_ctx {
 #endif
 	bool edma_initialized;
 			/* Flag to check initialization status */
+	uint32_t rx_ring_queue_map[EDMA_MAX_PRI_PER_CORE][NR_CPUS];
+			/* Rx ring to queue mapping */
 };
 
 extern struct edma_gbl_ctx edma_gbl_ctx;

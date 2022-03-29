@@ -16,6 +16,7 @@
  * USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <linux/module.h>
 #include <linux/debugfs.h>
 #include <linux/interrupt.h>
 #include <linux/of.h>
@@ -35,6 +36,7 @@
 #include "edma_regs.h"
 #include "edma_debug.h"
 #include "edma_debugfs.h"
+#include "nss_dp_dev.h"
 
 /*
  * EDMA hardware instance
@@ -602,6 +604,25 @@ static int edma_of_get_pdata(struct resource *edma_res)
 	}
 
 	/*
+	 * Get rx_ring to queue mapping
+	 */
+	ret = of_property_read_u32_array(edma_gbl_ctx.device_node,
+			"qcom,rx-ring-queue-map",
+			(int32_t *)edma_gbl_ctx.rx_ring_queue_map,
+			(EDMA_MAX_PRI_PER_CORE * NR_CPUS));
+	if (ret) {
+		edma_err("Unable to read Rx ring to queue map array. ret: %d\n", ret);
+		return -EINVAL;
+	}
+
+	for (i = 0; i < EDMA_MAX_PRI_PER_CORE; i++) {
+		for_each_possible_cpu(j) {
+			edma_debug("Rx ring to queue map[%d][%d] = %d\n", i, j,
+					edma_gbl_ctx.rx_ring_queue_map[i][j]);
+		}
+	}
+
+	/*
 	 * Get TXDESC flow control Group ID Map
 	 */
 	ret = of_property_read_u32_array(edma_gbl_ctx.device_node,
@@ -729,6 +750,46 @@ static void edma_init_ring_maps(void)
 }
 
 /*
+ * edma_cfg_ucast_priority_map_tbl()
+ *	Configure unicast priority map table
+ *
+ * Map int_priority values to priority class and initialize
+ * unicast priority map table for default profile_id.
+ */
+static sw_error_t edma_configure_ucast_prio_map_tbl(void)
+{
+	uint8_t pri_class;
+	uint8_t int_pri;
+	sw_error_t ret;
+
+	/*
+	 * Set the priority class value for every possible priority.
+	 */
+	for (int_pri = 0; int_pri < EDMA_PRI_MAX; int_pri++) {
+		pri_class = nss_dp_pri_map[int_pri];
+
+		/*
+		 * Priority offset should be less than maximum supported queue priority
+		 */
+		if (pri_class > (EDMA_MAX_PRI_PER_CORE - 1)) {
+			edma_err("Configured incorrect priority offset: %d\n", pri_class);
+			return SW_BAD_PARAM;
+		}
+
+		ret = fal_ucast_priority_class_set(EDMA_SWITCH_DEV_ID, EDMA_CPU_PORT_PROFILE_ID, int_pri, pri_class);
+		if (unlikely(ret != SW_OK)) {
+			edma_err("Failed with error: %d to set queue priority class for int_pri: %d for profile_id: %d\n",
+				  ret, int_pri, EDMA_CPU_PORT_PROFILE_ID);
+			return ret;
+		}
+
+		edma_info("profile_id: %d, int_priority: %d, pri_class: %d\n", EDMA_CPU_PORT_PROFILE_ID, int_pri, pri_class);
+	}
+
+	return ret;
+}
+
+/*
  * edma_configure_rps_hash_map()
  *	Configure RPS hash map
  *
@@ -739,18 +800,19 @@ static void edma_init_ring_maps(void)
  */
 void edma_configure_rps_hash_map(struct edma_gbl_ctx *egc)
 {
-	uint32_t hash, q_off = 0;
+	uint32_t hash = 0;
+	uint32_t q_off = EDMA_CPU_PORT_QUEUE_START;
 
 	/*
 	 * Initialize the store
 	 */
 	for (hash = 0; hash < EDMA_RSS_HASH_MAX; hash++) {
-		fal_ucast_hash_map_set(0, EDMA_PORT_PROFILE_ID, hash, q_off);
+		fal_ucast_hash_map_set(0, EDMA_CPU_PORT_PROFILE_ID, hash, q_off);
 		edma_info("profile_id: %u, hash: %u, q_off: %u\n",
-				EDMA_PORT_PROFILE_ID, hash, q_off);
+				EDMA_CPU_PORT_PROFILE_ID, hash, q_off);
 
-		q_off += EDMA_PORT_QUEUE_PER_CORE;
-		q_off %= edma_cfg_rx_rps_num_cores;
+		q_off += EDMA_MAX_PRI_PER_CORE;
+		q_off %= (EDMA_MAX_PRI_PER_CORE * edma_cfg_rx_rps_num_cores);
 	}
 }
 
@@ -854,6 +916,19 @@ static int edma_hw_init(struct edma_gbl_ctx *egc)
 	 */
 	data = EDMA_PORT_PAD_EN | EDMA_PORT_EDMA_EN;
 	edma_reg_write(EDMA_REG_PORT_CTRL, data);
+
+	/*
+	 * Initialize unicast priority map table
+	 */
+	ret = (int)edma_configure_ucast_prio_map_tbl();
+	if (ret) {
+		edma_err("Failed to initialize unicast priority map table: %d\n", ret);
+		edma_cfg_rx_rings_disable(egc);
+		edma_cfg_tx_rings_disable(egc);
+		edma_cfg_tx_rings_cleanup(egc);
+		edma_cfg_rx_rings_cleanup(egc);
+		return ret;
+	}
 
 	/*
 	 * Initialize RPS hash map table
@@ -1061,7 +1136,7 @@ int edma_init(void)
 	 * redirect packets/flows to specific host cores.
 	 */
 	for (i = 0; i < NR_CPUS; i++) {
-		queue_start = EDMA_PORT_QUEUE_START + (i * EDMA_PORT_QUEUE_PER_CORE);
+		queue_start = edma_gbl_ctx.rx_ring_queue_map[EDMA_CPU_PORT_QUEUE_START][i];
 		ppe_drv_core2queue_mapping(i, queue_start);
 	}
 
