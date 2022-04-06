@@ -44,7 +44,7 @@
 #define EDMA_RX_PID_IS_IPV4(pid)	(!((pid) & (~EDMA_RX_PID_IPV4_MAX)))
 #define EDMA_RX_PID_IS_IPV6(pid)	(!(!((pid) & EDMA_RX_PID_IPV6)))
 
-#define EDMA_RXDESC_BUFFER_ADDR_GET(desc)	((uint32_t)((desc)->word0))
+#define EDMA_RXDESC_BUFFER_ADDR_GET(desc)	((uint32_t)(le32_to_cpu((desc)->word0)))
 #define EDMA_RXDESC_OPAQUE_GET(desc)		((uintptr_t)((uint64_t)((desc)->word2) | \
 						((uint64_t)((desc)->word3) << 0x20)))
 #define EDMA_RXDESC_SRCINFO_TYPE_PORTID		0x2000
@@ -55,29 +55,35 @@
 #define EDMA_RXDESC_PORTNUM_BITS		0x0FFF
 
 #define EDMA_RXDESC_PACKET_LEN_MASK		0x3FFFF
-#define EDMA_RXDESC_PACKET_LEN_GET(desc)	(((desc)->word5) & \
+#define EDMA_RXDESC_PACKET_LEN_GET(desc)	((le32_to_cpu((desc)->word5)) & \
 						EDMA_RXDESC_PACKET_LEN_MASK)
 #define EDMA_RXDESC_MORE_BIT_MASK		0x40000000
-#define EDMA_RXDESC_MORE_BIT_GET(desc)		(((desc)->word1) & \
+#define EDMA_RXDESC_MORE_BIT_GET(desc)		((le32_to_cpu((desc)->word1)) & \
 						EDMA_RXDESC_MORE_BIT_MASK)
-#define EDMA_RXDESC_SRC_INFO_GET(desc)		(((desc)->word4) & 0xFFFF)
-#define EDMA_RXDESC_L3CSUM_STATUS_GET(desc)	(((desc)->word6) & \
+#define EDMA_RXDESC_SRC_INFO_GET(desc)		((le32_to_cpu((desc)->word4)) & 0xFFFF)
+#define EDMA_RXDESC_L3CSUM_STATUS_GET(desc)	((le32_to_cpu((desc)->word6)) & \
 						EDMA_RXDESC_L3CSUM_STATUS_MASK)
-#define EDMA_RXDESC_L4CSUM_STATUS_GET(desc)	(((desc)->word6) & \
+#define EDMA_RXDESC_L4CSUM_STATUS_GET(desc)	((le32_to_cpu((desc)->word6)) & \
 						EDMA_RXDESC_L4CSUM_STATUS_MASK)
-#define EDMA_RXDESC_SERVICE_CODE_GET(desc)	(((desc)->word7) & 0x1FF)
-#define EDMA_RXDESC_PID_GET(desc)		(((desc)->word7) & 0x7000) >> 0x0C
+#define EDMA_RXDESC_SERVICE_CODE_GET(desc)	((le32_to_cpu((desc)->word7)) & 0x1FF)
+#define EDMA_RXDESC_PID_GET(desc)		(((le32_to_cpu((desc)->word7)) & 0x7000) >> 0x0C)
 
 #define EDMA_RXFILL_BUF_SIZE_MASK		0xFFFF
 #define EDMA_RXFILL_BUF_SIZE_SHIFT		16
+
+/*
+ * Opaque values are not accessed by the EDMA HW, so endianness conversion is not needed
+ */
 #define EDMA_RXFILL_OPAQUE_LO_SET(desc, ptr)	(((desc)->word2) = (uint32_t)(uintptr_t)(ptr))
 #define EDMA_RXFILL_OPAQUE_HI_SET(desc, ptr)	(((desc)->word3) = (uint32_t)((uint64_t)(ptr) >> 0x20))
 #define EDMA_RXFILL_OPAQUE_GET(desc)		((uintptr_t)((uint64_t)((desc)->word2) | \
 						((uint64_t)((desc)->word3) << 0x20)))
-#define EDMA_RXFILL_PACKET_LEN_SET(desc, len)	(((desc)->word1) = (uint32_t)\
-						((((uint32_t)len) << \
-						EDMA_RXFILL_BUF_SIZE_SHIFT) & 0xFFFF0000))
-#define EDMA_RXFILL_BUFFER_ADDR_SET(desc, addr)	(((desc)->word0) = (uint32_t)(addr))
+
+#define EDMA_RXFILL_PACKET_LEN_SET(desc, len)	{ \
+	(((desc)->word1) = (uint32_t)((((uint32_t)len) << EDMA_RXFILL_BUF_SIZE_SHIFT) & 0xFFFF0000)); \
+	cpu_to_le32s(&((desc)->word1)); \
+}
+#define EDMA_RXFILL_BUFFER_ADDR_SET(desc, addr)	(((desc)->word0) = (uint32_t)(cpu_to_le32(addr)))
 
 /*
  * edma_rx_stats

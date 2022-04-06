@@ -68,6 +68,7 @@
 #define EDMA_TXDESC_SERVICE_CODE_SHIFT	16
 #define EDMA_TXDESC_SERVICE_CODE_MASK	(0x1FF << EDMA_TXDESC_SERVICE_CODE_SHIFT)
 #define EDMA_TXDESC_SERVICE_CODE_SET(desc, x)	((desc)->word1 |= (((x) << EDMA_TXDESC_SERVICE_CODE_SHIFT) & EDMA_TXDESC_SERVICE_CODE_MASK))
+#define EDMA_TXDESC_BUFFER_ADDR_SET(desc, addr)	(((desc)->word0) = (addr))
 #ifdef __LP64__
 #define EDMA_TXDESC_OPAQUE_GET(desc)		(((uint64_t)(desc)->word3 << 32) | (desc)->word2)
 #define EDMA_TXCMPL_OPAQUE_GET(desc)		(((uint64_t)(desc)->word1 << 32) | (desc)->word0)
@@ -84,10 +85,22 @@
 #define EDMA_TXDESC_OPAQUE_SET(desc, ptr)	EDMA_TXDESC_OPAQUE_LO_SET(desc, ptr)
 #endif
 #define EDMA_TXCMPL_MORE_BIT_MASK		0x40000000
-#define EDMA_TXCMPL_MORE_BIT_GET(desc)		((desc)->word2 & EDMA_TXCMPL_MORE_BIT_MASK)
+#define EDMA_TXCMPL_MORE_BIT_GET(desc)		((le32_to_cpu((desc)->word2)) & EDMA_TXCMPL_MORE_BIT_MASK)
 
 #define EDMA_TXCOMP_RING_ERROR_MASK	0x7fffff
-#define EDMA_TXCOMP_RING_ERROR_GET(x)	((x) & EDMA_TXCOMP_RING_ERROR_MASK)
+#define EDMA_TXCOMP_RING_ERROR_GET(x)	((le32_to_cpu(x)) & EDMA_TXCOMP_RING_ERROR_MASK)
+
+/*
+ * Opaque values are set in word2 and word3, they are not accessed by the EDMA HW,
+ * so endianness conversion is not needed.
+ */
+#define EDMA_TXDESC_ENDIAN_SET(desc)	{ \
+	cpu_to_le32s(&((desc)->word0)); \
+	cpu_to_le32s(&((desc)->word1)); \
+	cpu_to_le32s(&((desc)->word4)); \
+	cpu_to_le32s(&((desc)->word5)); \
+	cpu_to_le32s(&((desc)->word6)); \
+}
 
 /*
  * edma_tx
