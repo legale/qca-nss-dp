@@ -19,7 +19,7 @@
 #ifndef __NSS_DP_SYN_DP_RX__
 #define __NSS_DP_SYN_DP_RX__
 
-#define SYN_DP_NAPI_BUDGET_RX		32
+#define SYN_DP_NAPI_BUDGET_RX		64
 #define SYN_DP_RX_DESC_SIZE		128	/* Rx Descriptors needed in the descriptor pool/queue */
 #define SYN_DP_RX_DESC_MAX_INDEX	(SYN_DP_RX_DESC_SIZE - 1)
 
