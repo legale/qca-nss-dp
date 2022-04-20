@@ -183,6 +183,7 @@ static int edma_debugfs_tx_rings_stats_show(struct seq_file *m, void __attribute
 		do {
 			start = u64_stats_fetch_begin_irq(&stats->syncp);
 			tx_desc_stats[i].no_desc_avail = stats->no_desc_avail;
+			tx_desc_stats[i].tso_max_seg_exceed = stats->tso_max_seg_exceed;
 		} while (u64_stats_fetch_retry_irq(&stats->syncp, start));
 	}
 
@@ -225,6 +226,8 @@ static int edma_debugfs_tx_rings_stats_show(struct seq_file *m, void __attribute
 		seq_printf(m, "\t\tEDMA TX descriptor %d ring stats:\n", i + tx_desc_start_id);
 		seq_printf(m, "\t\t txdesc[%d]:no_desc_avail = %llu\n",
 				i + tx_desc_start_id, tx_desc_stats[i].no_desc_avail);
+		seq_printf(m, "\t\t txdesc[%d]:tso_max_seg_exceed = %llu\n",
+				i + tx_desc_start_id, tx_desc_stats[i].tso_max_seg_exceed);
 		seq_printf(m, "\n");
 	}
 

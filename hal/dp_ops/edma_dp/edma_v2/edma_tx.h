@@ -34,6 +34,8 @@
 #define EDMA_TX_RING_SIZE		1024
 #define EDMA_TX_RING_SIZE_MASK		(EDMA_TX_RING_SIZE - 1)
 
+#define EDMA_TX_TSO_SEG_MAX		32	/* Max segment processing capacity of HW for TSO */
+
 #define EDMA_TX_RING_PER_CORE_MAX	(EDMA_TX_MAX_PRIORITY_LEVEL * EDMA_MAX_GMACS)
 
 #define EDMA_DST_PORT_TYPE		2
@@ -145,6 +147,7 @@ struct edma_tx_cmpl_stats {
  */
 struct edma_tx_desc_stats {
 	uint64_t no_desc_avail;			/* No descriptor available to transmit */
+	uint64_t tso_max_seg_exceed;		/* Packets extending EDMA_TX_TSO_SEG_MAX segments */
 	struct u64_stats_sync syncp;		/* Synchronization pointer */
 };
 

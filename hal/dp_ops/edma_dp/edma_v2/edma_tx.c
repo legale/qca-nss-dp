@@ -322,6 +322,7 @@ static struct edma_pri_txdesc *edma_tx_skb_first_desc(struct nss_dp_dev *dp_dev,
 
 	/*
 	 * Check if the packet needs TSO
+	 * This will be mostly true for SG packets.
 	 */
 	if (unlikely(skb_is_gso(skb))) {
 		if ((skb_shinfo(skb)->gso_type == SKB_GSO_TCPV4) ||
@@ -563,6 +564,21 @@ enum edma_tx edma_tx_ring_xmit(struct net_device *netdev, struct sk_buff *skb,
 		EDMA_TXDESC_ENDIAN_SET(txdesc);
 		num_desc_filled++;
 	} else {
+		/*
+		 * HW does not support TSO for packets with more than or equal to
+		 * 32 segments. HW hangs up if it sees more than 32 segments.
+		 * To be on safer side, drop the packets with such conditions.
+		 * TODO: Perform SW TSO for such packets.
+		 */
+		if (unlikely(skb_shinfo(skb)->gso_segs >= EDMA_TX_TSO_SEG_MAX)) {
+			edma_debug("Number of segments %u more than %u for %d ring\n",
+					skb_shinfo(skb)->gso_segs, EDMA_TX_TSO_SEG_MAX, txdesc_ring->id);
+			u64_stats_update_begin(&txdesc_stats->syncp);
+			++txdesc_stats->tso_max_seg_exceed;
+			u64_stats_update_end(&txdesc_stats->syncp);
+			return EDMA_TX_FAIL;
+		}
+
 		num_tx_desc_needed += 1;
 		num_tx_desc_needed += edma_tx_num_descs_for_sg(skb);
 
