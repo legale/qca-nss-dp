@@ -697,7 +697,7 @@ static void edma_init_ring_maps(void)
  * to be mapped to different Rx rings which are assigned to different
  * cores using IRQ affinity configuration.
  */
-static void edma_configure_rps_hash_map(struct edma_gbl_ctx *egc)
+void edma_configure_rps_hash_map(struct edma_gbl_ctx *egc)
 {
 	uint32_t hash, q_off = 0;
 
@@ -706,10 +706,11 @@ static void edma_configure_rps_hash_map(struct edma_gbl_ctx *egc)
 	 */
 	for (hash = 0; hash < EDMA_RSS_HASH_MAX; hash++) {
 		fal_ucast_hash_map_set(0, EDMA_PORT_PROFILE_ID, hash, q_off);
-		edma_info("profile_id: %u, hash: %u, q_off: %u\n", EDMA_PORT_PROFILE_ID, hash, q_off);
+		edma_info("profile_id: %u, hash: %u, q_off: %u\n",
+				EDMA_PORT_PROFILE_ID, hash, q_off);
 
 		q_off += EDMA_PORT_QUEUE_PER_CORE;
-		q_off %= EDMA_PORT_QUEUE_NUM;
+		q_off %= edma_cfg_rx_rps_num_cores;
 	}
 }
 
@@ -1026,6 +1027,26 @@ static struct ctl_table edma_rx_flow_control_table[] = {
 };
 
 /*
+ * edma_sub
+ *	EDMA sub directory
+ */
+static struct ctl_table edma_sub[] = {
+	{
+		.procname	=	"rx_fc",
+		.mode		=	0555,
+		.child		=	edma_rx_flow_control_table,
+	},
+	{
+		.procname	=	"rps_num_cores",
+		.data		=	&edma_cfg_rx_rps_num_cores,
+		.maxlen		=	sizeof(int),
+		.mode		=	0644,
+		.proc_handler	=	edma_cfg_rx_rps
+	},
+	{}
+};
+
+/*
  * edma_main
  *	EDMA main directory
  */
@@ -1033,7 +1054,7 @@ static struct ctl_table edma_main[] = {
 	{
 		.procname	=	"edma",
 		.mode		=	0555,
-		.child		=	edma_rx_flow_control_table,
+		.child		=	edma_sub,
 	},
 	{}
 };

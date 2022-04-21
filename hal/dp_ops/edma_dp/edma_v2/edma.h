@@ -281,6 +281,7 @@ int32_t edma_misc_stats_alloc(void);
 void edma_misc_stats_free(void);
 void edma_enable_interrupts(struct edma_gbl_ctx *egc);
 void edma_disable_interrupts(struct edma_gbl_ctx *egc);
+void edma_configure_rps_hash_map(struct edma_gbl_ctx *egc);
 
 /*
  * edma_reg_read()

@@ -39,6 +39,7 @@
 
 extern uint32_t edma_cfg_rx_fc_enable;
 extern uint32_t edma_cfg_rx_queue_tail_drop_enable;
+extern uint32_t edma_cfg_rx_rps_num_cores;
 
 void edma_cfg_rx_rings(struct edma_gbl_ctx *egc);
 int32_t edma_cfg_rx_rings_alloc(struct edma_gbl_ctx *egc);
@@ -54,5 +55,7 @@ int edma_cfg_rx_fc_enable_handler(struct ctl_table *table, int write,
 		void __user *buffer, size_t *lenp, loff_t *ppos);
 void edma_cfg_rx_page_mode_and_jumbo(struct edma_gbl_ctx *egc);
 int edma_cfg_rx_queue_tail_drop_handler(struct ctl_table *table, int write,
+		void __user *buffer, size_t *lenp, loff_t *ppos);
+int edma_cfg_rx_rps(struct ctl_table *table, int write,
 		void __user *buffer, size_t *lenp, loff_t *ppos);
 #endif	/* __EDMA_CFG_RX_H__ */

@@ -32,6 +32,7 @@
 
 uint32_t edma_cfg_rx_fc_enable = EDMA_RX_FC_ENABLE;
 uint32_t edma_cfg_rx_queue_tail_drop_enable = EDMA_RX_QUEUE_TAIL_DROP_ENABLE;
+uint32_t edma_cfg_rx_rps_num_cores = NR_CPUS;
 
 /*
  * edma_cfg_rx_fill_ring_cleanup()
@@ -1212,5 +1213,32 @@ int edma_cfg_rx_queue_tail_drop_handler(struct ctl_table *table, int write,
 					edma_cfg_rx_queue_tail_drop_enable);
 	}
 
+	return ret;
+}
+
+/*
+ * edma_cfg_rx_rps()
+ *	API to configure RPS hash mapping for the given number of cores
+ */
+int edma_cfg_rx_rps(struct ctl_table *table, int write,
+		void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	int ret;
+
+	ret = proc_dointvec(table, write, buffer, lenp, ppos);
+
+	if (!write) {
+		return ret;
+	}
+
+	if (!edma_cfg_rx_rps_num_cores ||
+			(edma_cfg_rx_rps_num_cores > NR_CPUS)) {
+		edma_err("Incorrect queue count: %d. Setting it to default"
+			       " value: %d", edma_cfg_rx_rps_num_cores, NR_CPUS);
+		edma_cfg_rx_rps_num_cores = NR_CPUS;
+	}
+	edma_configure_rps_hash_map(&edma_gbl_ctx);
+
+	edma_warn("EDMA RPS configured to use %d cores\n", edma_cfg_rx_rps_num_cores);
 	return ret;
 }
