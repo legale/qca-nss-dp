@@ -288,7 +288,7 @@ static int edma_dp_configure(struct net_device *netdev, uint32_t macid)
 		return -EINVAL;
 	}
 
-	edma_info("nss_dp_edma: Registering netdev %s(qcom-id:%d) with EDMA\n",
+	edma_debug("nss_dp_edma: Registering netdev %s(qcom-id:%d) with EDMA\n",
 		netdev->name, macid);
 
 	/*

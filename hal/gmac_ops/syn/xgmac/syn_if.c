@@ -445,7 +445,7 @@ static void *syn_init(struct nss_gmac_hal_platform_data *gmacpdata)
 
 	spin_lock_init(&shd->nghd.slock);
 
-	netdev_info(ndev, "ioremap OK.Size 0x%x Ndev base 0x%lx macbase 0x%px\n",
+	netdev_dbg(ndev, "ioremap OK.Size 0x%x Ndev base 0x%lx macbase 0x%px\n",
 			gmacpdata->reg_len,
 			ndev->base_addr,
 			shd->nghd.mac_base);
