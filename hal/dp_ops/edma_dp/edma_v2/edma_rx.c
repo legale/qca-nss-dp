@@ -524,6 +524,9 @@ process_next_scatter:
 /*
  * edma_rx_handle_linear_packets()
  *	Handle linear packets
+ *
+ * Return false if packet is consumed by this function for error cases or VP/SC cases.
+ * Return true otherwise, for caller to deliver packet to the stack.
  */
 static inline bool edma_rx_handle_linear_packets(struct edma_gbl_ctx *egc,
 		struct edma_rxdesc_ring *rxdesc_ring,
@@ -556,7 +559,6 @@ static inline bool edma_rx_handle_linear_packets(struct edma_gbl_ctx *egc,
 		 */
 		dmac_inv_range((void *)skb->data,
 				(void *)(skb->data + pkt_length));
-		prefetch(skb->data);
 		skb_put(skb, pkt_length);
 		goto send_to_stack;
 	}
@@ -576,6 +578,7 @@ static inline bool edma_rx_handle_linear_packets(struct edma_gbl_ctx *egc,
 		u64_stats_update_begin(&rx_stats->syncp);
 		rx_stats->rx_nr_frag_headroom_err++;
 		u64_stats_update_end(&rx_stats->syncp);
+		dev_kfree_skb_any(skb);
 		return false;
 	}
 
@@ -622,7 +625,7 @@ send_to_stack:
 		 *    don't send it to stack otherwise continue with regular processing.
 		 */
 		if (edma_rx_handle_sc_cc_packets(egc, rxdesc_ring, rxdesc_desc, skb)) {
-			return true;
+			return false;
 		}
 	}
 
@@ -631,19 +634,8 @@ send_to_stack:
 	 */
 	if (EDMA_RXDESC_SRC_DST_INFO_GET(rxdesc_desc) & EDMA_RXDESC_SRC_DST_VP_MASK) {
 		edma_rx_process_vp(rxdesc_desc, skb);
-		return true;
+		return false;
 	}
-
-	skb->protocol = eth_type_trans(skb, skb->dev);
-
-	/*
-	 * Send packet upto network stack
-	 */
-#if defined(NSS_DP_ENABLE_NAPI_GRO)
-	napi_gro_receive(&rxdesc_ring->napi, skb);
-#else
-	netif_receive_skb(skb);
-#endif
 
 	return true;
 }
@@ -743,6 +735,9 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 	uint32_t work_leftover;
 	uint16_t prod_idx, cons_idx, end_idx;
 	struct sk_buff *next_skb;
+	struct sk_buff *skb_nxt = NULL, *cur_skb = NULL;
+	struct list_head rx_list;
+	INIT_LIST_HEAD(&rx_list);
 
 	/*
 	 * Get Rx ring producer and consumer indices
@@ -854,10 +849,9 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 				next_skb = (struct sk_buff *)EDMA_RXDESC_OPAQUE_GET(next_rxdesc_desc);
 				prefetch(next_skb);
 
-				if (unlikely(!edma_rx_handle_linear_packets(egc, rxdesc_ring, rxdesc_desc, skb))) {
-					dev_kfree_skb_any(skb);
+				if (likely(edma_rx_handle_linear_packets(egc, rxdesc_ring, rxdesc_desc, skb))) {
+					list_add_tail(&skb->list, &rx_list);
 				}
-
 				goto next_rx_desc;
 			}
 		}
@@ -887,8 +881,26 @@ next_rx_desc:
 			edma_reg_write(EDMA_REG_RXDESC_CONS_IDX(rxdesc_ring->ring_id),
 					cons_idx);
 			rxdesc_ring->cons_idx = cons_idx;
-			edma_rx_alloc_buffer(rxdesc_ring->rxfill,
-					EDMA_RX_MAX_PROCESS);
+			edma_rx_alloc_buffer(rxdesc_ring->rxfill, EDMA_RX_MAX_PROCESS);
+
+			cur_skb = list_first_entry(&rx_list, struct sk_buff, list);
+			if (likely(cur_skb)) {
+				prefetch(cur_skb);
+				prefetch(cur_skb->data);
+
+				list_for_each_entry_safe(cur_skb, skb_nxt, &rx_list, list) {
+					if (likely(skb_nxt)) {
+						prefetch(skb_nxt);
+						prefetch(skb_nxt->data);
+					}
+
+					if (likely(cur_skb)) {
+						cur_skb->protocol = eth_type_trans(cur_skb,
+										cur_skb->dev);
+					}
+				}
+				netif_receive_skb_list(&rx_list);
+			}
 		}
 	}
 
@@ -901,6 +913,25 @@ next_rx_desc:
 				cons_idx);
 		rxdesc_ring->cons_idx = cons_idx;
 		edma_rx_alloc_buffer(rxdesc_ring->rxfill, work_leftover);
+
+		cur_skb = list_first_entry(&rx_list, struct sk_buff, list);
+		if (likely(cur_skb)) {
+			prefetch(cur_skb);
+			prefetch(cur_skb->data);
+
+			list_for_each_entry_safe(cur_skb, skb_nxt, &rx_list, list) {
+				if (likely(skb_nxt)) {
+					prefetch(skb_nxt);
+					prefetch(skb_nxt->data);
+				}
+
+				if (likely(cur_skb)) {
+					cur_skb->protocol = eth_type_trans(cur_skb,
+									cur_skb->dev);
+				}
+			}
+			netif_receive_skb_list(&rx_list);
+		}
 	}
 
 	return work_done;
