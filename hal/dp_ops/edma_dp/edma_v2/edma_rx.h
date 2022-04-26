@@ -32,7 +32,14 @@
 #define EDMA_RXDESC_PRI_DESC(R, i)	EDMA_GET_PDESC(R, i, struct edma_rxdesc_desc)
 #define EDMA_RXDESC_SEC_DESC(R, i)	EDMA_GET_SDESC(R, i, struct edma_rxdesc_sec_desc)
 
+#if defined(NSS_DP_MEM_PROFILE_LOW)
+#define EDMA_RX_RING_SIZE		512
+#elif defined(NSS_DP_MEM_PROFILE_MEDIUM)
+#define EDMA_RX_RING_SIZE		1024
+#else
 #define EDMA_RX_RING_SIZE		2048
+#endif
+
 #define EDMA_RX_RING_SIZE_MASK		(EDMA_RX_RING_SIZE - 1)
 #define EDMA_RX_RING_ID_MASK		0x1F
 #define EDMA_MAX_RXDESC_RINGS		24	/* Max RxDesc rings */
