@@ -78,6 +78,152 @@ static inline void edma_rx_process_vp(struct edma_rxdesc_desc *rxdesc_desc, stru
 }
 
 /*
+ * edma_rx_alloc_buffer_list()
+ *	Write a given list of Rx buffers to the Rx fill ring
+ */
+static inline int edma_rx_alloc_buffer_list(struct edma_rxfill_ring *rxfill_ring, int alloc_count, struct list_head *rx_skb_alloc)
+{
+	struct edma_rxfill_desc *rxfill_desc;
+	struct edma_rx_fill_stats *rxfill_stats = &rxfill_ring->rx_fill_stats;
+	uint16_t prod_idx, start_idx;
+	uint16_t num_alloc = 0;
+	uint32_t rx_alloc_size = rxfill_ring->alloc_size;
+	uint32_t buf_len = rxfill_ring->buf_len;
+	bool page_mode = rxfill_ring->page_mode;
+	struct sk_buff *cur_skb = NULL;
+
+	/*
+	 * Get RXFILL ring producer index
+	 */
+	prod_idx = rxfill_ring->prod_idx;
+	start_idx = prod_idx;
+
+	while (likely(alloc_count--)) {
+		void *page_addr = NULL;
+		struct page *pg;
+		struct sk_buff *skb;
+		dma_addr_t buff_addr;
+
+		/*
+		 * Get RXFILL descriptor
+		 */
+		rxfill_desc = EDMA_RXFILL_DESC(rxfill_ring, prod_idx);
+
+		/*
+		 * Prefetch the current rxfill descriptor.
+		 */
+		prefetch(rxfill_desc);
+
+		/*
+		 * Detach the current SKB to use from the list,
+		 * and prefetch the next SKB's cache lines.
+		 */
+		cur_skb = list_first_entry(rx_skb_alloc, struct sk_buff, list);
+		skb = cur_skb;
+		if (!list_entry_is_head(cur_skb->next, rx_skb_alloc, list)){
+			prefetch(cur_skb->next);
+			prefetch(&cur_skb->next->__pkt_type_offset);
+			prefetch(&cur_skb->next->head);
+		}
+		list_del_init(&cur_skb->list);
+		skb->next = skb->prev = NULL;
+
+		/*
+		 * Reserve headroom
+		 */
+		skb_reserve(skb, EDMA_RX_SKB_HEADROOM + NET_IP_ALIGN);
+
+		/*
+		 * Map Rx buffer for DMA
+		 */
+		if (likely(!page_mode)) {
+			buff_addr = (dma_addr_t)virt_to_phys(skb->data);
+		} else {
+			pg = alloc_page(GFP_ATOMIC);
+			if (unlikely(!pg)) {
+				u64_stats_update_begin(&rxfill_stats->syncp);
+				++rxfill_stats->page_alloc_failed;
+				u64_stats_update_end(&rxfill_stats->syncp);
+				dev_kfree_skb_any(skb);
+				edma_debug("edma_gbl_ctx:%px Unable to allocate page", &edma_gbl_ctx);
+				break;
+			}
+
+			/*
+			 * Get virtual address of allocated page
+			 */
+			page_addr = page_address(pg);
+			buff_addr = (dma_addr_t)virt_to_phys(page_addr);
+			skb_fill_page_desc(skb, 0, pg, 0, PAGE_SIZE);
+			dmac_inv_range_no_dsb(page_addr, (page_addr + PAGE_SIZE));
+		}
+
+		EDMA_RXFILL_BUFFER_ADDR_SET(rxfill_desc, buff_addr);
+
+		/*
+		 * Store skb in opaque
+		 */
+		EDMA_RXFILL_OPAQUE_LO_SET(rxfill_desc, skb);
+#ifdef __LP64__
+		EDMA_RXFILL_OPAQUE_HI_SET(rxfill_desc, skb);
+#endif
+
+		/*
+		 * Save buffer size in RXFILL descriptor
+		 */
+		EDMA_RXFILL_PACKET_LEN_SET(
+				rxfill_desc,
+				cpu_to_le32((uint32_t)
+					(buf_len)
+					& EDMA_RXFILL_BUF_SIZE_MASK));
+
+		/*
+		 * Invalidate skb->data
+		 */
+		dmac_inv_range_no_dsb((void *)skb->data,
+				(void *)(skb->data + rx_alloc_size -
+					EDMA_RX_SKB_HEADROOM -
+					NET_IP_ALIGN));
+		prod_idx = (prod_idx + 1) & EDMA_RX_RING_SIZE_MASK;
+		num_alloc++;
+	}
+
+	if (likely(num_alloc)) {
+		uint16_t end_idx =
+			(start_idx + num_alloc) & EDMA_RX_RING_SIZE_MASK;
+
+		rxfill_desc = EDMA_RXFILL_DESC(rxfill_ring, start_idx);
+
+		/*
+		 * Write-back all the cached descriptors
+		 * that are processed.
+		 */
+		if (end_idx > start_idx) {
+			dmac_clean_range_no_dsb((void *)rxfill_desc,
+					(void *)(rxfill_desc + num_alloc));
+		} else {
+			dmac_clean_range_no_dsb((void *)rxfill_ring->desc,
+					(void *)(rxfill_ring->desc + end_idx));
+			dmac_clean_range_no_dsb((void *)rxfill_desc,
+					(void *)(rxfill_ring->desc +
+							EDMA_RX_RING_SIZE));
+		}
+
+		/*
+		 * Make sure the information written to the descriptors
+		 * is updated before writing to the hardware.
+		 */
+		dsb(st);
+
+		edma_reg_write(EDMA_REG_RXFILL_PROD_IDX(rxfill_ring->ring_id),
+								prod_idx);
+		rxfill_ring->prod_idx = prod_idx;
+	}
+
+	return num_alloc;
+}
+
+/*
  * edma_rx_alloc_buffer()
  *	Alloc Rx buffers for one RxFill ring
  */
@@ -734,10 +880,16 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 	uint32_t work_to_do, work_done = 0;
 	uint32_t work_leftover;
 	uint16_t prod_idx, cons_idx, end_idx;
+	uint16_t num_alloc = 0;
 	struct sk_buff *next_skb;
-	struct sk_buff *skb_nxt = NULL, *cur_skb = NULL;
+	struct sk_buff *cur_skb = NULL, *skb_nxt = NULL;
+	struct sk_buff *skb_alloc = NULL;
+	uint32_t rx_alloc_size = rxdesc_ring->rxfill->alloc_size;
+	struct edma_rx_fill_stats *rxfill_stats = &rxdesc_ring->rxfill->rx_fill_stats;
 	struct list_head rx_list;
+	struct list_head rx_skb_alloc;
 	INIT_LIST_HEAD(&rx_list);
+	INIT_LIST_HEAD(&rx_skb_alloc);
 
 	/*
 	 * Get Rx ring producer and consumer indices
@@ -872,6 +1024,15 @@ next_rx_desc:
 		 * Update work done
 		 */
 		work_done++;
+		skb_alloc = dev_alloc_skb(rx_alloc_size);
+		if (likely(skb_alloc)) {
+			list_add_tail(&skb_alloc->list, &rx_skb_alloc);
+			num_alloc++;
+		} else {
+			u64_stats_update_begin(&rxfill_stats->syncp);
+			++rxfill_stats->alloc_failed;
+			u64_stats_update_end(&rxfill_stats->syncp);
+		}
 
 		/*
 		 * Check if we can refill EDMA_RX_MAX_PROCESS worth buffers,
@@ -881,7 +1042,12 @@ next_rx_desc:
 			edma_reg_write(EDMA_REG_RXDESC_CONS_IDX(rxdesc_ring->ring_id),
 					cons_idx);
 			rxdesc_ring->cons_idx = cons_idx;
-			edma_rx_alloc_buffer(rxdesc_ring->rxfill, EDMA_RX_MAX_PROCESS);
+
+			/*
+			 * TODO: Handle refill failures using retry
+			 */
+			edma_rx_alloc_buffer_list(rxdesc_ring->rxfill, num_alloc,
+					&rx_skb_alloc);
 
 			cur_skb = list_first_entry(&rx_list, struct sk_buff, list);
 			if (likely(cur_skb)) {
@@ -901,6 +1067,13 @@ next_rx_desc:
 				}
 				netif_receive_skb_list(&rx_list);
 			}
+
+			/*
+			 * Reset the Reap and refill lists, and count for next iteration
+			 */
+			INIT_LIST_HEAD(&rx_skb_alloc);
+			INIT_LIST_HEAD(&rx_list);
+			num_alloc = 0;
 		}
 	}
 
@@ -912,7 +1085,11 @@ next_rx_desc:
 		edma_reg_write(EDMA_REG_RXDESC_CONS_IDX(rxdesc_ring->ring_id),
 				cons_idx);
 		rxdesc_ring->cons_idx = cons_idx;
-		edma_rx_alloc_buffer(rxdesc_ring->rxfill, work_leftover);
+
+		/*
+		 * TODO: Handle refill failures using retry
+		 */
+		edma_rx_alloc_buffer_list(rxdesc_ring->rxfill, num_alloc, &rx_skb_alloc);
 
 		cur_skb = list_first_entry(&rx_list, struct sk_buff, list);
 		if (likely(cur_skb)) {
