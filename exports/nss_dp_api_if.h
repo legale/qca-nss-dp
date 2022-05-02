@@ -249,6 +249,29 @@ bool nss_dp_is_netdev_physical(struct net_device *netdev);
 int32_t nss_dp_get_port_num(struct net_device *netdev);
 
 /**
+ * edma_cfg_rx_point_offload_ring_queue_get
+ *	Get point offload base queue id.
+ *
+ * @return
+ * Queue_id
+ */
+uint16_t edma_cfg_rx_point_offload_ring_queue_get(void);
+
+/**
+ * nss_dp_point_offload_info_get
+ *	Get point offload ring number.
+ *
+ * @param[in] txdesc_ring pointer to tx descriptor point offload ring.
+ * @param[in] txcmpl_ring pointer to tx completion point offload ring.
+ * @param[in] rxdesc_ring pointer to rx descriptor point offload ring.
+ * @param[in] rxfill_ring pointer to rx fill point offload ring.
+ *
+ * @return
+ * None
+ */
+void nss_dp_point_offload_info_get(uint32_t *txdesc_ring, uint32_t *txcmpl_ring, uint32_t *rxdesc_ring, uint32_t *rxfill_ring);
+
+/**
  *@}
  */
 

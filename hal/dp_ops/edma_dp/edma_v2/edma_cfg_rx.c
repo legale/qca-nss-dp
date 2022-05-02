@@ -347,6 +347,152 @@ static void edma_cfg_rx_desc_ring_to_queue_mapping(uint32_t enable)
 	}
 }
 
+#if defined(NSS_DP_POINT_OFFLOAD)
+
+/*
+ * edma_cfg_rx_desc_point_offload_rings_reset_queue_mapping()
+ *	API to reset Rx descriptor rings to PPE queues mapping
+ */
+static int32_t edma_cfg_rx_desc_point_offload_rings_reset_queue_mapping(struct edma_gbl_ctx *egc)
+{
+	fal_queue_bmp_t queue_bmp = {0};
+	int32_t i = egc->rxdesc_point_offload_ring;
+
+	if (fal_edma_ring_queue_map_set(EDMA_SWITCH_DEV_ID, i, &queue_bmp) != SW_OK) {
+		edma_err("Error in unmapping rxdesc point offload ring %d to PPE queue mapping to"
+				" disable its backpressure configuration\n", i);
+		return -1;
+	}
+
+	return 0;
+}
+
+/*
+ * edma_cfg_rx_desc_point_offload_ring_reset_queue_priority()
+ *	API to reset the priority for PPE queues mapped to Rx rings
+ */
+static int32_t edma_cfg_rx_desc_point_offload_ring_reset_queue_priority(struct edma_gbl_ctx *egc)
+{
+	fal_qos_scheduler_cfg_t qsch;
+	uint32_t queue_id, bit_set, port_id, cur_queue_word;
+	int32_t i = egc->rxdesc_point_offload_ring;
+
+	for (i = 0; i < EDMA_RING_MAPPED_QUEUE_BM_WORD_COUNT; i++) {
+		cur_queue_word = egc->rxdesc_point_offload_ring_to_queue_bm[i];
+		if (cur_queue_word == 0) {
+			continue;
+		}
+
+		do {
+			bit_set = ffs((uint32_t)cur_queue_word);
+			queue_id = (((i * EDMA_BITS_IN_WORD) + bit_set) - 1);
+			memset(&qsch, 0, sizeof(fal_qos_scheduler_cfg_t));
+			if (fal_queue_scheduler_get(EDMA_SWITCH_DEV_ID, queue_id,
+						EDMA_PPE_QUEUE_LEVEL, &port_id, &qsch) != SW_OK) {
+				edma_err("Error in getting %u queue's priority information\n", queue_id);
+				return -1;
+			}
+
+			/*
+			 * Configure the default queue priority.
+			 * In IPQ95xx, currently single queue is being mapped to the
+			 * single Rx descriptor ring and each ring will be processed
+			 * on the separate core. Therefore assigning same priority to
+			 * all these mapped queues.
+			 */
+			qsch.e_pri = EDMA_RX_DEFAULT_QUEUE_PRI;
+			qsch.c_pri = EDMA_RX_DEFAULT_QUEUE_PRI;
+			if (fal_queue_scheduler_set(EDMA_SWITCH_DEV_ID, queue_id,
+						EDMA_PPE_QUEUE_LEVEL, port_id, &qsch) != SW_OK) {
+				edma_err("Error in resetting %u queue's priority\n", queue_id);
+				return -1;
+			}
+
+			cur_queue_word &= ~(1 << (bit_set - 1));
+		} while (cur_queue_word);
+	}
+
+	return 0;
+}
+/*
+ * edma_cfg_rx_desc_point_offload_ring_reset_queue_config()
+ *	API to reset the Rx descriptor rings configurations
+ */
+static int32_t edma_cfg_rx_desc_point_offload_ring_reset_queue_config(struct edma_gbl_ctx *egc)
+{
+	/*
+	 * Unmap Rxdesc ring to PPE queue mapping to reset its backpressure configuration
+	 */
+	if (edma_cfg_rx_desc_point_offload_rings_reset_queue_mapping(egc)) {
+		edma_err("Error in resetting Rx desc point offload ring backpressure configurations\n");
+		return -1;
+	}
+
+	/*
+	 * Reset the priority for PPE queues mapped to Rx rings
+	 */
+	if(edma_cfg_rx_desc_point_offload_ring_reset_queue_priority(egc)) {
+		return -1;
+	}
+
+	return 0;
+}
+
+/*
+ * edma_cfg_rx_desc_point_offload_ring_to_queue_mapping()
+ *	API to map Rx descriptor rings to PPE queue for backpressure
+ */
+static void edma_cfg_rx_desc_point_offload_ring_to_queue_mapping(struct edma_gbl_ctx *egc, uint32_t enable)
+{
+	uint32_t i = egc->rxdesc_point_offload_ring;
+	sw_error_t ret;
+	fal_queue_bmp_t queue_bmp = {0};
+
+	/*
+	 * Rxdesc ring to PPE queue mapping
+	 */
+	if (enable) {
+		memcpy(queue_bmp.bmp, edma_gbl_ctx.rxdesc_ring_to_queue_bm[i], sizeof(uint32_t) * EDMA_RING_MAPPED_QUEUE_BM_WORD_COUNT);
+	}
+
+	ret = fal_edma_ring_queue_map_set(0, egc->rxdesc_point_offload_ring, &queue_bmp);
+	if (ret != SW_OK) {
+		edma_err("Error in configuring Rx point offload ring to PPE queue mapping." " ret: %d, id: %d, queue: %d\n",
+					ret, egc->rxdesc_point_offload_ring, queue_bmp.bmp[0]);
+		if (edma_cfg_rx_desc_rings_reset_queue_mapping()) {
+			edma_err("Error in resetting Rx desc point offload ring backpressure configurations\n");
+		}
+		return;
+	}
+}
+
+/*
+ * edma_cfg_rx_fill_point_offload_ring_flow_control()
+ *	Configure Rx fill point offload ring flow control configuration
+ */
+static void edma_cfg_rx_fill_point_offload_ring_flow_control(struct edma_gbl_ctx *egc, uint32_t threshold_xoff, uint32_t threshold_xon)
+{
+	uint32_t data;
+
+	data = (threshold_xoff & EDMA_RXFILL_FC_XOFF_THRE_MASK) << EDMA_RXFILL_FC_XOFF_THRE_SHIFT;
+	data |= ((threshold_xon & EDMA_RXFILL_FC_XON_THRE_MASK) << EDMA_RXFILL_FC_XON_THRE_SHIFT);
+	edma_reg_write(EDMA_REG_RXFILL_FC_THRE(egc->rxfill_point_offload_ring), data);
+}
+
+/*
+ * edma_cfg_rx_desc_point_offload_ring_flow_control()
+ *	Configure Rx descriptor ring flow control configuration
+ */
+static void edma_cfg_rx_desc_point_offload_ring_flow_control(struct edma_gbl_ctx *egc, uint32_t threshold_xoff, uint32_t threshold_xon)
+{
+	uint32_t data;
+
+	data = (threshold_xoff & EDMA_RXDESC_FC_XOFF_THRE_MASK) << EDMA_RXDESC_FC_XOFF_THRE_SHIFT;
+	data |= ((threshold_xon & EDMA_RXDESC_FC_XON_THRE_MASK) << EDMA_RXDESC_FC_XON_THRE_SHIFT);
+	edma_reg_write(EDMA_REG_RXDESC_FC_THRE(egc->rxdesc_point_offload_ring), data);
+}
+#endif
+
 /*
  * edma_cfg_rx_fill_ring_flow_control()
  *	Configure Rx fill ring flow control configuration
@@ -554,6 +700,85 @@ static void edma_cfg_rx_fill_ring_configure(struct edma_rxfill_ring *rxfill_ring
 	edma_rx_alloc_buffer(rxfill_ring, rxfill_ring->count - 1);
 }
 
+#if defined(NSS_DP_POINT_OFFLOAD)
+/*
+ * edma_cfg_rx_point_offload_ring_queue_get()
+ *	Get rx point offload ring queue
+ */
+uint16_t edma_cfg_rx_point_offload_ring_queue_get(void)
+{
+	struct edma_gbl_ctx *egc = &edma_gbl_ctx;
+	return egc->point_offload_queue;
+}
+EXPORT_SYMBOL(edma_cfg_rx_point_offload_ring_queue_get);
+
+/*
+ * edma_cfg_rx_qid_to_rx_desc_point_offload_ring_mapping()
+ *	Configure PPE queue id to Rx ring mapping
+ */
+static void edma_cfg_rx_qid_to_rx_desc_point_offload_ring_mapping(struct edma_gbl_ctx *egc)
+{
+	uint32_t desc_index, i;
+	uint32_t reg_index, data;
+	uint16_t start = EDMA_RX_POINT_OFFLOAD_QUEUE_BASE;
+	uint16_t end = start + EDMA_RX_POINT_OFFLOAD_QUEUE_NUM;
+
+	egc->point_offload_queue = EDMA_RX_POINT_OFFLOAD_QUEUE_BASE;
+
+	/*
+	 * Set PPE QID to EDMA Rx ring mapping.
+	 * Each entry can hold mapping for 4 PPE queues and
+	 * entry size is 4 bytes.
+	 */
+	desc_index = (egc->rxdesc_point_offload_ring & EDMA_RX_RING_ID_MASK);
+
+	for (i = start; i <= end; i += EDMA_QID2RID_NUM_PER_REG) {
+		reg_index = i/EDMA_QID2RID_NUM_PER_REG;
+		data = EDMA_RX_RING_ID_QUEUE0_SET(desc_index) |
+			EDMA_RX_RING_ID_QUEUE1_SET(desc_index) |
+			EDMA_RX_RING_ID_QUEUE2_SET(desc_index) |
+			EDMA_RX_RING_ID_QUEUE3_SET(desc_index);
+
+		edma_reg_write(EDMA_QID2RID_TABLE_MEM(reg_index), data);
+		desc_index += EDMA_QID2RID_NUM_PER_REG;
+
+		edma_debug("Configure QID2RID(%d) reg:0x%x to 0x%x\n",
+				i, EDMA_QID2RID_TABLE_MEM(reg_index), data);
+	}
+}
+
+/*
+ * edma_cfg_rx_point_offload_rings_to_rx_fill_mapping()
+ *	Configure Rx rings to Rx fill mapping
+ */
+static void edma_cfg_rx_point_offload_rings_to_rx_fill_mapping(struct edma_gbl_ctx *egc)
+{
+	uint32_t data, reg, ring_id = egc->rxdesc_point_offload_ring;
+	if ((ring_id >= 0) && (ring_id <= 9)) {
+		reg = EDMA_REG_RXDESC2FILL_MAP_0;
+	} else if ((ring_id >= 10) && (ring_id <= 19)) {
+		reg = EDMA_REG_RXDESC2FILL_MAP_1;
+	} else {
+		reg = EDMA_REG_RXDESC2FILL_MAP_2;
+	}
+
+	edma_debug("Configure RXDESC point offload ring:%u to use RXFILL point offload ring:%u\n", ring_id, egc->rxfill_point_offload_ring);
+
+	/*
+	 * Set the Rx fill ring number in the
+	 * mapping register.
+	 */
+	data = edma_reg_read(reg);
+	data |= (egc->rxfill_point_offload_ring & EDMA_RXDESC2FILL_MAP_RXDESC_MASK) <<
+				((ring_id % 10) * 3);
+	edma_reg_write(reg, data);
+
+	edma_debug("EDMA_REG_RXDESC2FILL_MAP_0: 0x%x\n", edma_reg_read(EDMA_REG_RXDESC2FILL_MAP_0));
+	edma_debug("EDMA_REG_RXDESC2FILL_MAP_1: 0x%x\n", edma_reg_read(EDMA_REG_RXDESC2FILL_MAP_1));
+	edma_debug("EDMA_REG_RXDESC2FILL_MAP_2: 0x%x\n", edma_reg_read(EDMA_REG_RXDESC2FILL_MAP_2));
+}
+#endif
+
 /*
  * edma_cfg_rx_qid_to_rx_desc_ring_mapping()
  *	Configure PPE queue id to Rx ring mapping
@@ -729,6 +954,39 @@ void edma_cfg_rx_mapping(struct edma_gbl_ctx *egc)
 	edma_cfg_rx_qid_to_rx_desc_ring_mapping(egc);
 	edma_cfg_rx_rings_to_rx_fill_mapping(egc);
 }
+
+#if defined(NSS_DP_POINT_OFFLOAD)
+/*
+ * edma_cfg_rx_point_offload_mapping()
+ *	API to setup RX ring mapping
+ */
+void edma_cfg_rx_point_offload_mapping(struct edma_gbl_ctx *egc)
+{
+	uint32_t queue_id = EDMA_PORT_QUEUE_START;
+	uint32_t word_idx, bit_idx;
+
+	/*
+	 * MAP Rx descriptor ring to PPE queues.
+	 *
+	 * TODO:
+	 * Currently one Rx descriptor ring can get mapped to only
+	 * single PPE queue. Multiple queues getting mapped to the
+	 * single Rx descriptor ring is not yet supported.
+	 * In future, we can support this by getting the Rx descriptor
+	 * ring to queue mapping from the dtsi.
+	 */
+	word_idx = (queue_id / (EDMA_BITS_IN_WORD - 1));
+	bit_idx = (queue_id % EDMA_BITS_IN_WORD);
+	egc->rxdesc_point_offload_ring_to_queue_bm[word_idx] = 1 << bit_idx;
+
+	/*
+	 * Reset Rx descriptor ring mapped queue's configurations
+	 */
+	edma_cfg_rx_desc_point_offload_ring_reset_queue_config(egc);
+	edma_cfg_rx_qid_to_rx_desc_point_offload_ring_mapping(egc);
+	edma_cfg_rx_point_offload_rings_to_rx_fill_mapping(egc);
+}
+#endif
 
 /*
  * edma_cfg_rx_rings_setup()
@@ -964,6 +1222,44 @@ void edma_cfg_rx_rings_cleanup(struct edma_gbl_ctx *egc)
 		egc->rxdesc_ring_to_queue_bm = NULL;
 	}
 }
+
+#if defined(NSS_DP_POINT_OFFLOAD)
+/*
+ * edma_cfg_rx_point_offload_rings()
+ *	Configure EDMA point offload rings
+ */
+void edma_cfg_rx_point_offload_rings(struct edma_gbl_ctx *egc)
+{
+	if (edma_cfg_rx_fc_enable) {
+		/*
+		 * Validate flow control X-OFF and X-ON configurations
+		 */
+		if ((nss_dp_rx_fc_xoff < EDMA_RX_FC_XOFF_THRE_MIN) ||
+				(nss_dp_rx_fc_xoff > EDMA_RX_RING_SIZE)) {
+			edma_err("Incorrect Rx Xoff flow control value: %d. Setting\n"
+					" it to default value: %d", nss_dp_rx_fc_xoff,
+					NSS_DP_RX_FC_XOFF_DEF);
+			nss_dp_rx_fc_xoff = NSS_DP_RX_FC_XOFF_DEF;
+		}
+
+		if ((nss_dp_rx_fc_xon < EDMA_RX_FC_XON_THRE_MIN) ||
+				(nss_dp_rx_fc_xon > EDMA_RX_RING_SIZE) ||
+				(nss_dp_rx_fc_xon < nss_dp_rx_fc_xoff)) {
+			edma_err("Incorrect Rx Xon flow control value: %d. Setting\n"
+					" it to default value: %d", nss_dp_rx_fc_xon,
+					NSS_DP_RX_FC_XON_DEF);
+			nss_dp_rx_fc_xon = NSS_DP_RX_FC_XON_DEF;
+		}
+
+		/*
+		 * Configure Rx flow control configurations
+		 */
+		edma_cfg_rx_desc_point_offload_ring_flow_control(egc, nss_dp_rx_fc_xoff, nss_dp_rx_fc_xon);
+		edma_cfg_rx_fill_point_offload_ring_flow_control(egc, nss_dp_rx_fc_xoff, nss_dp_rx_fc_xon);
+		edma_cfg_rx_desc_point_offload_ring_to_queue_mapping(egc, edma_cfg_rx_fc_enable);
+	}
+}
+#endif
 
 /*
  * edma_cfg_rx_rings()

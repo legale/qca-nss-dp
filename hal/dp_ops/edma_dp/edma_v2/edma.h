@@ -269,6 +269,20 @@ struct edma_gbl_ctx {
 			/* Page mode enabled or disabled */
 	uint32_t rx_jumbo_mru;
 			/* Jumbo MRU value */
+#if defined(NSS_DP_POINT_OFFLOAD)
+	uint32_t txdesc_point_offload_ring;
+			/* TX desc ring for point offlaod */
+	uint32_t txcmpl_point_offload_ring;
+			/* TX completion ring for point offlaod */
+	uint32_t rxfill_point_offload_ring;
+			/* RX fill ring for point offload */
+	uint32_t rxdesc_point_offload_ring;
+			/* RX desc ring for point offload */
+	uint32_t rxdesc_point_offload_ring_to_queue_bm[EDMA_RING_MAPPED_QUEUE_BM_WORD_COUNT];
+			/* PPE queue ids of the Rx descriptor point offload rings */
+	uint16_t point_offload_queue;
+			/* Point offload base queue id */
+#endif
 	bool edma_initialized;
 			/* Flag to check initialization status */
 };

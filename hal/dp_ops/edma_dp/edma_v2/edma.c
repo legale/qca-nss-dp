@@ -44,6 +44,20 @@ static char edma_txcmpl_irq_name[EDMA_MAX_TXCMPL_RINGS][EDMA_IRQ_NAME_SIZE];
 static char edma_rxdesc_irq_name[EDMA_MAX_RXDESC_RINGS][EDMA_IRQ_NAME_SIZE];
 
 /*
+ * nss_dp_point_offload_info_get()
+ *	Get point offload ring information
+ */
+void nss_dp_point_offload_info_get(uint32_t *txdesc_num, uint32_t *txcmpl_num,
+		uint32_t *rxfill_num, uint32_t *rxdesc_num)
+{
+	*txdesc_num = edma_gbl_ctx.txdesc_point_offload_ring;
+	*txcmpl_num = edma_gbl_ctx.txcmpl_point_offload_ring;
+	*rxfill_num = edma_gbl_ctx.rxfill_point_offload_ring;
+	*rxdesc_num = edma_gbl_ctx.rxdesc_point_offload_ring;
+}
+EXPORT_SYMBOL(nss_dp_point_offload_info_get);
+
+/*
  * edma_disable_interrupts()
  *	Disable EDMA RX/TX interrupt masks.
  */
@@ -613,6 +627,32 @@ static int edma_of_get_pdata(struct resource *edma_res)
 				edma_gbl_ctx.rxdesc_ring_map[0][i]);
 	}
 
+#if defined(NSS_DP_POINT_OFFLOAD)
+	ret = of_property_read_u32(edma_gbl_ctx.device_node, "qcom,txdesc_point_offload_ring", &edma_gbl_ctx.txdesc_point_offload_ring);
+	if (ret) {
+		edma_err("Unable to parse Tx point offload ring with err: %d\n", ret);
+		return -EINVAL;
+	}
+
+	ret = of_property_read_u32(edma_gbl_ctx.device_node, "qcom,txcmpl_point_offload_ring", &edma_gbl_ctx.txcmpl_point_offload_ring);
+	if (ret) {
+		edma_err("Unable to read Tx completion point offload ring with err: %d\n", ret);
+		return -EINVAL;
+	}
+
+	ret = of_property_read_u32(edma_gbl_ctx.device_node, "qcom,rxfill_point_offload_ring", &edma_gbl_ctx.rxfill_point_offload_ring);
+	if (ret) {
+		edma_err("Unable to read RX fill point offload ring with err: %d\n", ret);
+		return -EINVAL;
+	}
+
+	ret = of_property_read_u32(edma_gbl_ctx.device_node, "qcom,rxdesc_point_offload_ring", &edma_gbl_ctx.rxdesc_point_offload_ring);
+	if (ret) {
+		edma_err("Unable to read RX desc point offload ring with err: %d\n", ret);
+		return -EINVAL;
+	}
+#endif
+
 	return 0;
 }
 
@@ -777,9 +817,15 @@ static int edma_hw_init(struct edma_gbl_ctx *egc)
 
 	edma_cfg_tx_mapping(egc);
 	edma_cfg_rx_mapping(egc);
+#if defined(NSS_DP_POINT_OFFLOAD)
+	edma_cfg_rx_point_offload_mapping(egc);
+#endif
 
 	edma_cfg_tx_rings(egc);
 	edma_cfg_rx_rings(egc);
+#if defined(NSS_DP_POINT_OFFLOAD)
+	edma_cfg_rx_point_offload_rings(egc);
+#endif
 
 	/*
 	 * Configure DMA request priority, DMA read burst length,

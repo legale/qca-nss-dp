@@ -37,11 +37,21 @@
 #define EDMA_RX_MITIGATION_PKT_CNT_MIN	0	/* Rx mitigation packet count's minimum value */
 #define EDMA_RX_MITIGATION_PKT_CNT_MAX	256	/* Rx mitigation packet count's maximum value */
 
+#if defined(NSS_DP_POINT_OFFLOAD)
+/* TODO: we need to close with ssdk team to close this numbers */
+#define EDMA_RX_POINT_OFFLOAD_QUEUE_BASE 56
+#define EDMA_RX_POINT_OFFLOAD_QUEUE_NUM 3
+#endif
+
 extern uint32_t edma_cfg_rx_fc_enable;
 extern uint32_t edma_cfg_rx_queue_tail_drop_enable;
 extern uint32_t edma_cfg_rx_rps_num_cores;
 
 void edma_cfg_rx_rings(struct edma_gbl_ctx *egc);
+#if defined(NSS_DP_POINT_OFFLOAD)
+void edma_cfg_rx_point_offload_mapping(struct edma_gbl_ctx *egc);
+void edma_cfg_rx_point_offload_rings(struct edma_gbl_ctx *egc);
+#endif
 int32_t edma_cfg_rx_rings_alloc(struct edma_gbl_ctx *egc);
 void edma_cfg_rx_rings_cleanup(struct edma_gbl_ctx *egc);
 void edma_cfg_rx_napi_disable(struct edma_gbl_ctx *egc);
