@@ -878,7 +878,6 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 	struct edma_rxdesc_desc *next_rxdesc_desc;
 	struct edma_rx_desc_stats *rxdesc_stats = &rxdesc_ring->rx_desc_stats;
 	uint32_t work_to_do, work_done = 0;
-	uint32_t work_leftover;
 	uint16_t prod_idx, cons_idx, end_idx;
 	uint16_t num_alloc = 0;
 	struct sk_buff *next_skb;
@@ -937,7 +936,6 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 	 */
 	next_skb = (struct sk_buff *)EDMA_RXDESC_OPAQUE_GET(next_rxdesc_desc);
 
-	work_leftover = work_to_do & (EDMA_RX_MAX_PROCESS - 1);
 	while (likely(work_to_do--)) {
 		struct edma_rxdesc_desc *rxdesc_desc;
 		struct net_device *ndev;
@@ -951,11 +949,13 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 		 */
 		cons_idx = (cons_idx + 1) & EDMA_RX_RING_SIZE_MASK;
 
-		/*
-		 * Prefetch the next Rx descriptor.
-		 */
-		next_rxdesc_desc = EDMA_RXDESC_PRI_DESC(rxdesc_ring, cons_idx);
-		prefetch(next_rxdesc_desc);
+		if (likely(work_to_do)) {
+			/*
+			 * Prefetch the next Rx descriptor.
+			 */
+			next_rxdesc_desc = EDMA_RXDESC_PRI_DESC(rxdesc_ring, cons_idx);
+			prefetch(next_rxdesc_desc);
+		}
 
 		/*
 		 * Handle linear packets or initial segments first
@@ -994,12 +994,16 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 			 * Handle linear packets
 			 */
 			if (likely(!EDMA_RXDESC_MORE_BIT_GET(rxdesc_desc))) {
-
-				/*
-				 * Prefetch the next skb.
-				 */
-				next_skb = (struct sk_buff *)EDMA_RXDESC_OPAQUE_GET(next_rxdesc_desc);
-				prefetch(next_skb);
+				if (likely(work_to_do)) {
+					/*
+					 * Prefetch the next skb.
+					 */
+					next_skb = (struct sk_buff *)EDMA_RXDESC_OPAQUE_GET(next_rxdesc_desc);
+					prefetch(next_skb);
+					prefetch(((uint8_t *)next_skb) + 64);
+					prefetch(((uint8_t *)next_skb) + 128);
+					prefetch(((uint8_t *)next_skb) + 192);
+				}
 
 				if (likely(edma_rx_handle_linear_packets(egc, rxdesc_ring, rxdesc_desc, skb))) {
 					list_add_tail(&skb->list, &rx_list);
@@ -1008,11 +1012,13 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 			}
 		}
 
-		/*
-		 * Prefetch the next skb.
-		 */
-		next_skb = (struct sk_buff *)EDMA_RXDESC_OPAQUE_GET(next_rxdesc_desc);
-		prefetch(next_skb);
+		if (likely(work_to_do)) {
+			/*
+			 * Prefetch the next skb.
+			 */
+			next_skb = (struct sk_buff *)EDMA_RXDESC_OPAQUE_GET(next_rxdesc_desc);
+			prefetch(next_skb);
+		}
 
 		/*
 		 * Handle scatter frame processing for first/middle/last segments
@@ -1033,83 +1039,37 @@ next_rx_desc:
 			++rxfill_stats->alloc_failed;
 			u64_stats_update_end(&rxfill_stats->syncp);
 		}
-
-		/*
-		 * Check if we can refill EDMA_RX_MAX_PROCESS worth buffers,
-		 * if yes, refill and update index before continuing.
-		 */
-		if (unlikely(!(work_done & (EDMA_RX_MAX_PROCESS - 1)))) {
-			edma_reg_write(EDMA_REG_RXDESC_CONS_IDX(rxdesc_ring->ring_id),
-					cons_idx);
-			rxdesc_ring->cons_idx = cons_idx;
-
-			/*
-			 * TODO: Handle refill failures using retry
-			 */
-			edma_rx_alloc_buffer_list(rxdesc_ring->rxfill, num_alloc,
-					&rx_skb_alloc);
-
-			cur_skb = list_first_entry(&rx_list, struct sk_buff, list);
-			if (likely(cur_skb)) {
-				prefetch(cur_skb);
-				prefetch(cur_skb->data);
-
-				list_for_each_entry_safe(cur_skb, skb_nxt, &rx_list, list) {
-					if (likely(skb_nxt)) {
-						prefetch(skb_nxt);
-						prefetch(skb_nxt->data);
-					}
-
-					if (likely(cur_skb)) {
-						cur_skb->protocol = eth_type_trans(cur_skb,
-										cur_skb->dev);
-					}
-				}
-				netif_receive_skb_list(&rx_list);
-			}
-
-			/*
-			 * Reset the Reap and refill lists, and count for next iteration
-			 */
-			INIT_LIST_HEAD(&rx_skb_alloc);
-			INIT_LIST_HEAD(&rx_list);
-			num_alloc = 0;
-		}
 	}
+
+	edma_reg_write(EDMA_REG_RXDESC_CONS_IDX(rxdesc_ring->ring_id), cons_idx);
+	rxdesc_ring->cons_idx = cons_idx;
 
 	/*
-	 * Check if we need to refill and update
-	 * index for any buffers before exit.
+	 * TODO: Handle refill failures using retry
 	 */
-	if (unlikely(work_leftover)) {
-		edma_reg_write(EDMA_REG_RXDESC_CONS_IDX(rxdesc_ring->ring_id),
-				cons_idx);
-		rxdesc_ring->cons_idx = cons_idx;
+	edma_rx_alloc_buffer_list(rxdesc_ring->rxfill, num_alloc, &rx_skb_alloc);
 
-		/*
-		 * TODO: Handle refill failures using retry
-		 */
-		edma_rx_alloc_buffer_list(rxdesc_ring->rxfill, num_alloc, &rx_skb_alloc);
-
-		cur_skb = list_first_entry(&rx_list, struct sk_buff, list);
-		if (likely(cur_skb)) {
-			prefetch(cur_skb);
-			prefetch(cur_skb->data);
-
-			list_for_each_entry_safe(cur_skb, skb_nxt, &rx_list, list) {
-				if (likely(skb_nxt)) {
-					prefetch(skb_nxt);
-					prefetch(skb_nxt->data);
-				}
-
-				if (likely(cur_skb)) {
-					cur_skb->protocol = eth_type_trans(cur_skb,
-									cur_skb->dev);
-				}
+	/*
+	 * Prefetch the packet data for the next skbuff, and the skbuff
+	 * structure for next and next-next skbuffs for optimal performance.
+	 */
+	list_for_each_entry_safe_reverse(cur_skb, skb_nxt, &rx_list, list) {
+		if (likely(skb_nxt)) {
+			if ((struct list_head *)skb_nxt->next != (struct list_head *)(&rx_list)) {
+				prefetch(skb_nxt->next);
+				prefetch((uint8_t *)(skb_nxt->next) + 128);
+				prefetch((uint8_t *)(skb_nxt->next) + 192);
 			}
-			netif_receive_skb_list(&rx_list);
+			prefetch(skb_nxt);
+			prefetch(&skb_nxt->__pkt_type_offset);
+			prefetch(skb_nxt->data);
+		}
+
+		if (likely(cur_skb)) {
+			cur_skb->protocol = eth_type_trans(cur_skb, cur_skb->dev);
 		}
 	}
+	netif_receive_skb_list(&rx_list);
 
 	return work_done;
 }
