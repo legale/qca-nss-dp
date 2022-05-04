@@ -2,6 +2,8 @@
  **************************************************************************
  * Copyright (c) 2016-2017,2020-2021 The Linux Foundation. All rights reserved.
  *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all copies.
@@ -69,44 +71,6 @@ static inline void qcom_clear_tx_flow_ctrl(struct nss_gmac_hal_dev *nghd)
 static inline void qcom_clear_mac_ctrl0(struct nss_gmac_hal_dev *nghd)
 {
 	hal_write_relaxed_reg(nghd->mac_base, QCOM_MAC_CTRL0, 0);
-}
-
-/*
- * qcom_rx_enable()
- */
-static inline void qcom_rx_enable(struct nss_gmac_hal_dev *nghd)
-{
-	hal_set_reg_bits(nghd->mac_base, QCOM_MAC_ENABLE, QCOM_RX_MAC_ENABLE);
-}
-
-/*
- * qcom_rx_disable()
- *	Disable the reception of frames on GMII/MII.
- *	GMAC receive state machine is disabled after completion of reception of
- *	current frame.
- */
-static inline void qcom_rx_disable(struct nss_gmac_hal_dev *nghd)
-{
-	hal_clear_reg_bits(nghd->mac_base, QCOM_MAC_ENABLE, QCOM_RX_MAC_ENABLE);
-}
-
-/*
- * qcom_tx_enable()
- */
-static inline void qcom_tx_enable(struct nss_gmac_hal_dev *nghd)
-{
-	hal_set_reg_bits(nghd->mac_base, QCOM_MAC_ENABLE, QCOM_TX_MAC_ENABLE);
-}
-
-/*
- * qcom_tx_disable()
- *	Disable the transmission of frames on GMII/MII.
- *	GMAC transmit state machine is disabled after completion of
- *	transmission of current frame.
- */
-static inline void qcom_tx_disable(struct nss_gmac_hal_dev *nghd)
-{
-	hal_clear_reg_bits(nghd->mac_base, QCOM_MAC_ENABLE, QCOM_TX_MAC_ENABLE);
 }
 
 /*

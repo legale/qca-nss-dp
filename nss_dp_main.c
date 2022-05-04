@@ -307,9 +307,11 @@ static int nss_dp_close(struct net_device *netdev)
 	/*
 	 * Notify GMAC to stop
 	 */
-	if (dp_priv->gmac_hal_ops->stop(dp_priv->gmac_hal_ctx)) {
-		netdev_dbg(netdev, "GMAC stop failed\n");
-		return -EAGAIN;
+	if (dp_priv->gmac_hal_ops->stop) {
+		if (dp_priv->gmac_hal_ops->stop(dp_priv->gmac_hal_ctx)) {
+			netdev_dbg(netdev, "GMAC stop failed\n");
+			return -EAGAIN;
+		}
 	}
 
 	/*
@@ -392,9 +394,11 @@ static int nss_dp_open(struct net_device *netdev)
 	/*
 	 * Notify GMAC to start receive/transmit
 	 */
-	if (dp_priv->gmac_hal_ops->start(dp_priv->gmac_hal_ctx)) {
-		netdev_dbg(netdev, "GMAC start failed\n");
-		return -EAGAIN;
+	if (dp_priv->gmac_hal_ops->start) {
+		if (dp_priv->gmac_hal_ops->start(dp_priv->gmac_hal_ctx)) {
+			netdev_dbg(netdev, "GMAC start failed\n");
+			return -EAGAIN;
+		}
 	}
 
 	netif_start_queue(netdev);
