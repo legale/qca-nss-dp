@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -24,7 +24,6 @@
  */
 static int syn_dp_cfg_rx_setup_desc_queue(struct syn_dp_info *dev_info)
 {
-	dma_addr_t dma_addr;
 	struct syn_dp_info_rx *rx_info = &dev_info->dp_info_rx;
 	struct dma_desc_rx *first_desc = NULL;
 	struct net_device *netdev = rx_info->netdev;
@@ -49,7 +48,7 @@ static int syn_dp_cfg_rx_setup_desc_queue(struct syn_dp_info *dev_info)
 	rx_info->busy_rx_desc_cnt = 0;
 
 	netdev_dbg(netdev, "Rx Descriptors in Ring Mode: No. of descriptors = %d base = 0x%px dma = 0x%px\n",
-			SYN_DP_RX_DESC_SIZE, first_desc, (void *)dma_addr);
+			SYN_DP_RX_DESC_SIZE, first_desc, (void *)dev_info->rx_desc_dma_addr);
 
 	return NSS_DP_SUCCESS;
 }
