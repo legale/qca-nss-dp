@@ -881,7 +881,7 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 	uint16_t prod_idx, cons_idx, end_idx;
 	uint16_t num_alloc = 0;
 	struct sk_buff *next_skb;
-	struct sk_buff *cur_skb = NULL, *skb_nxt = NULL;
+	struct sk_buff *cur_skb = NULL, *skb_prev = NULL;
 	struct sk_buff *skb_alloc = NULL;
 	uint32_t rx_alloc_size = rxdesc_ring->rxfill->alloc_size;
 	struct edma_rx_fill_stats *rxfill_stats = &rxdesc_ring->rxfill->rx_fill_stats;
@@ -1053,22 +1053,21 @@ next_rx_desc:
 	 * Prefetch the packet data for the next skbuff, and the skbuff
 	 * structure for next and next-next skbuffs for optimal performance.
 	 */
-	list_for_each_entry_safe_reverse(cur_skb, skb_nxt, &rx_list, list) {
-		if (likely(skb_nxt)) {
-			if ((struct list_head *)skb_nxt->next != (struct list_head *)(&rx_list)) {
-				prefetch(skb_nxt->next);
-				prefetch((uint8_t *)(skb_nxt->next) + 128);
-				prefetch((uint8_t *)(skb_nxt->next) + 192);
+	list_for_each_entry_safe_reverse(cur_skb, skb_prev, &rx_list, list) {
+		if (likely(skb_prev)) {
+			if (likely(!list_is_first((struct list_head *)skb_prev, &rx_list))) {
+				prefetch(skb_prev->prev);
+				prefetch((uint8_t *)(skb_prev->prev) + 128);
+				prefetch((uint8_t *)(skb_prev->prev) + 192);
 			}
-			prefetch(skb_nxt);
-			prefetch(&skb_nxt->__pkt_type_offset);
-			prefetch(skb_nxt->data);
+			prefetch(skb_prev->data);
 		}
-
-		if (likely(cur_skb)) {
-			cur_skb->protocol = eth_type_trans(cur_skb, cur_skb->dev);
-		}
+		cur_skb->protocol = eth_type_trans(cur_skb, cur_skb->dev);
 	}
+
+	/*
+	 * Send packets upto the network stack
+	 */
 	netif_receive_skb_list(&rx_list);
 
 	return work_done;
