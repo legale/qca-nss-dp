@@ -828,19 +828,6 @@ static int32_t nss_dp_probe(struct platform_device *pdev)
 			netdev_dbg(netdev, "failed to connect to phy device\n");
 			goto phy_setup_fail;
 		}
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0))
-		dp_priv->phydev->advertising |=
-			(ADVERTISED_Pause | ADVERTISED_Asym_Pause);
-		dp_priv->phydev->supported |=
-			(SUPPORTED_Pause | SUPPORTED_Asym_Pause);
-#else
-		linkmode_set_bit(ETHTOOL_LINK_MODE_Pause_BIT, dp_priv->phydev->advertising);
-		linkmode_set_bit(ETHTOOL_LINK_MODE_Asym_Pause_BIT, dp_priv->phydev->advertising);
-
-		linkmode_set_bit(ETHTOOL_LINK_MODE_Pause_BIT, dp_priv->phydev->supported);
-		linkmode_set_bit(ETHTOOL_LINK_MODE_Asym_Pause_BIT, dp_priv->phydev->supported);
-#endif
 	}
 
 #if defined(NSS_DP_PPE_SUPPORT)
