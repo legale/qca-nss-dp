@@ -90,7 +90,6 @@ static inline int edma_rx_alloc_buffer_list(struct edma_rxfill_ring *rxfill_ring
 	uint32_t rx_alloc_size = rxfill_ring->alloc_size;
 	uint32_t buf_len = rxfill_ring->buf_len;
 	bool page_mode = rxfill_ring->page_mode;
-	struct sk_buff *cur_skb = NULL;
 
 	/*
 	 * Get RXFILL ring producer index
@@ -118,14 +117,13 @@ static inline int edma_rx_alloc_buffer_list(struct edma_rxfill_ring *rxfill_ring
 		 * Detach the current SKB to use from the list,
 		 * and prefetch the next SKB's cache lines.
 		 */
-		cur_skb = list_first_entry(rx_skb_alloc, struct sk_buff, list);
-		skb = cur_skb;
-		if (!list_entry_is_head(cur_skb->next, rx_skb_alloc, list)){
-			prefetch(cur_skb->next);
-			prefetch(&cur_skb->next->__pkt_type_offset);
-			prefetch(&cur_skb->next->head);
+		skb = list_first_entry(rx_skb_alloc, struct sk_buff, list);
+		if (likely(!list_entry_is_head(skb->next, rx_skb_alloc, list))) {
+			prefetch(skb->next);
+			prefetch(&skb->next->__pkt_type_offset);
+			prefetch(&skb->next->head);
 		}
-		list_del_init(&cur_skb->list);
+		list_del_init(&skb->list);
 		skb->next = skb->prev = NULL;
 
 		/*
@@ -171,11 +169,9 @@ static inline int edma_rx_alloc_buffer_list(struct edma_rxfill_ring *rxfill_ring
 		/*
 		 * Save buffer size in RXFILL descriptor
 		 */
-		EDMA_RXFILL_PACKET_LEN_SET(
-				rxfill_desc,
-				cpu_to_le32((uint32_t)
-					(buf_len)
-					& EDMA_RXFILL_BUF_SIZE_MASK));
+		EDMA_RXFILL_PACKET_LEN_SET(rxfill_desc,
+				cpu_to_le32((uint32_t)(buf_len) &
+				EDMA_RXFILL_BUF_SIZE_MASK));
 
 		/*
 		 * Invalidate skb->data
@@ -882,14 +878,13 @@ static inline struct net_device *edma_rx_get_src_dev(
 static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 				struct edma_rxdesc_ring *rxdesc_ring)
 {
-	struct edma_rxdesc_desc *next_rxdesc_desc;
+	struct edma_rxdesc_desc *rxdesc_desc, *pf_desc = NULL;
 	struct edma_rx_desc_stats *rxdesc_stats = &rxdesc_ring->rx_desc_stats;
 	uint32_t work_to_do, work_done = 0;
 	uint16_t prod_idx, cons_idx, end_idx;
+	uint16_t cons_idx_1, cons_idx_2;
 	uint16_t num_alloc = 0;
-	struct sk_buff *next_skb;
 	struct sk_buff *cur_skb = NULL, *skb_prev = NULL;
-	struct sk_buff *skb_alloc = NULL;
 	uint32_t rx_alloc_size = rxdesc_ring->rxfill->alloc_size;
 	struct edma_rx_fill_stats *rxfill_stats = &rxdesc_ring->rxfill->rx_fill_stats;
 	struct list_head rx_list;
@@ -902,8 +897,8 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 	 */
 	cons_idx = rxdesc_ring->cons_idx;
 
-	if (likely(rxdesc_ring->work_leftover > EDMA_RX_MAX_PROCESS)) {
-		work_to_do = rxdesc_ring->work_leftover;
+	if (likely(rxdesc_ring->work_leftover > budget)) {
+		work_to_do = budget;
 	} else {
 		prod_idx =
 			edma_reg_read(EDMA_REG_RXDESC_PROD_IDX(rxdesc_ring->ring_id)) &
@@ -911,58 +906,55 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 		work_to_do = EDMA_DESC_AVAIL_COUNT(prod_idx,
 				cons_idx, EDMA_RX_RING_SIZE);
 		rxdesc_ring->work_leftover = work_to_do;
+		if (likely(work_to_do > budget)) {
+			work_to_do = budget;
+		}
 	}
 
-	if (work_to_do > budget) {
-		work_to_do = budget;
-	}
 	rxdesc_ring->work_leftover -= work_to_do;
 
 	end_idx = (cons_idx + work_to_do) & EDMA_RX_RING_SIZE_MASK;
 
-	next_rxdesc_desc = EDMA_RXDESC_PRI_DESC(rxdesc_ring, cons_idx);
+	rxdesc_desc = EDMA_RXDESC_PRI_DESC(rxdesc_ring, cons_idx);
 
 	/*
 	 * Invalidate all the cached descriptors
 	 * that'll be processed.
 	 */
 	if (end_idx > cons_idx) {
-		dmac_inv_range_no_dsb((void *)next_rxdesc_desc,
-			(void *)(next_rxdesc_desc + work_to_do));
+		dmac_inv_range_no_dsb((void *)rxdesc_desc,
+			(void *)(rxdesc_desc + work_to_do));
 	} else {
 		dmac_inv_range_no_dsb((void *)rxdesc_ring->pdesc,
 			(void *)(rxdesc_ring->pdesc + end_idx));
-		dmac_inv_range_no_dsb((void *)next_rxdesc_desc,
+		dmac_inv_range_no_dsb((void *)rxdesc_desc,
 			(void *)(rxdesc_ring->pdesc + EDMA_RX_RING_SIZE));
 	}
 
 	dsb(st);
 
 	/*
-	 * Get opaque from RXDESC
+	 * Prefetch upto 3 Rx descriptors.
 	 */
-	next_skb = (struct sk_buff *)EDMA_RXDESC_OPAQUE_GET(next_rxdesc_desc);
+	prefetch(rxdesc_desc);
+	if (likely(work_to_do >= 3)) {
+		cons_idx_1 = (cons_idx + 1) & EDMA_RX_RING_SIZE_MASK;
+		pf_desc = EDMA_RXDESC_PRI_DESC(rxdesc_ring, cons_idx_1);
+		prefetch(pf_desc);
+
+		cons_idx_2 = (cons_idx_1 + 1) & EDMA_RX_RING_SIZE_MASK;
+		pf_desc = EDMA_RXDESC_PRI_DESC(rxdesc_ring, cons_idx_2);
+		prefetch(pf_desc);
+	}
 
 	while (likely(work_to_do--)) {
-		struct edma_rxdesc_desc *rxdesc_desc;
 		struct net_device *ndev;
-		struct sk_buff *skb;
-
-		skb = next_skb;
-		rxdesc_desc = next_rxdesc_desc;
+		struct sk_buff *skb, *skb_alloc;
 
 		/*
-		 * Update consumer index
+		 * Get opaque from RXDESC
 		 */
-		cons_idx = (cons_idx + 1) & EDMA_RX_RING_SIZE_MASK;
-
-		if (likely(work_to_do)) {
-			/*
-			 * Prefetch the next Rx descriptor.
-			 */
-			next_rxdesc_desc = EDMA_RXDESC_PRI_DESC(rxdesc_ring, cons_idx);
-			prefetch(next_rxdesc_desc);
-		}
+		skb = (struct sk_buff *)EDMA_RXDESC_OPAQUE_GET(rxdesc_desc);
 
 		/*
 		 * Handle linear packets or initial segments first
@@ -975,56 +967,34 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 			}
 
 			/*
+			 * Prefetch the third skb and the fourth descriptor
+			 */
+			if (likely(work_to_do >= 3)) {
+				struct sk_buff *pf_skb;
+				pf_skb = (struct sk_buff *)EDMA_RXDESC_OPAQUE_GET(pf_desc);
+				prefetch(pf_skb);
+				prefetch((uint8_t *)pf_skb + 128);
+				cons_idx_2 = (cons_idx_2 + 1) & EDMA_RX_RING_SIZE_MASK;
+
+				pf_desc = EDMA_RXDESC_PRI_DESC(rxdesc_ring, cons_idx_2);
+				prefetch(pf_desc);
+			}
+
+			/*
 			 * Update skb fields for head skb
 			 */
 			skb->dev = ndev;
 			skb->skb_iif = ndev->ifindex;
 
-#ifdef CONFIG_NET_SWITCHDEV
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0))
-			skb->offload_fwd_mark = ndev->offload_fwd_mark;
-#else
-			/*
-			 * TODO: Implement ndo_get_devlink_port()
-			 */
-			skb->offload_fwd_mark = 0;
-#endif
-			edma_debug("edma_gbl_ctx:%px skb:%px ring_idx:%u proto:0x%x mark:%u\n",
-					egc, skb, cons_idx, skb->protocol,
-					skb->offload_fwd_mark);
-#else
-			edma_debug("edma_gbl_ctx:%px skb:%px ring_idx:%u proto:0x%x\n",
-					egc, skb, cons_idx,  skb->protocol);
-#endif
-
 			/*
 			 * Handle linear packets
 			 */
 			if (likely(!EDMA_RXDESC_MORE_BIT_GET(rxdesc_desc))) {
-				if (likely(work_to_do)) {
-					/*
-					 * Prefetch the next skb.
-					 */
-					next_skb = (struct sk_buff *)EDMA_RXDESC_OPAQUE_GET(next_rxdesc_desc);
-					prefetch(next_skb);
-					prefetch(((uint8_t *)next_skb) + 64);
-					prefetch(((uint8_t *)next_skb) + 128);
-					prefetch(((uint8_t *)next_skb) + 192);
-				}
-
 				if (likely(edma_rx_handle_linear_packets(egc, rxdesc_ring, rxdesc_desc, skb))) {
 					list_add_tail(&skb->list, &rx_list);
 				}
 				goto next_rx_desc;
 			}
-		}
-
-		if (likely(work_to_do)) {
-			/*
-			 * Prefetch the next skb.
-			 */
-			next_skb = (struct sk_buff *)EDMA_RXDESC_OPAQUE_GET(next_rxdesc_desc);
-			prefetch(next_skb);
 		}
 
 		/*
@@ -1037,6 +1007,10 @@ next_rx_desc:
 		 * Update work done
 		 */
 		work_done++;
+
+		/*
+		 * Allocate one skb and add to refill list
+		 */
 		skb_alloc = dev_alloc_skb(rx_alloc_size);
 		if (likely(skb_alloc)) {
 			list_add_tail(&skb_alloc->list, &rx_skb_alloc);
@@ -1046,6 +1020,16 @@ next_rx_desc:
 			++rxfill_stats->alloc_failed;
 			u64_stats_update_end(&rxfill_stats->syncp);
 		}
+
+		/*
+		 * Update consumer index
+		 */
+		cons_idx = (cons_idx + 1) & EDMA_RX_RING_SIZE_MASK;
+
+		/*
+		 * Get the next Rx descriptor.
+		 */
+		rxdesc_desc = EDMA_RXDESC_PRI_DESC(rxdesc_ring, cons_idx);
 	}
 
 	edma_reg_write(EDMA_REG_RXDESC_CONS_IDX(rxdesc_ring->ring_id), cons_idx);
@@ -1056,26 +1040,31 @@ next_rx_desc:
 	 */
 	edma_rx_alloc_buffer_list(rxdesc_ring->rxfill, num_alloc, &rx_skb_alloc);
 
-	/*
-	 * Prefetch the packet data for the next skbuff, and the skbuff
-	 * structure for next and next-next skbuffs for optimal performance.
-	 */
-	list_for_each_entry_safe_reverse(cur_skb, skb_prev, &rx_list, list) {
-		if (likely(skb_prev)) {
-			if (likely(!list_is_first((struct list_head *)skb_prev, &rx_list))) {
-				prefetch(skb_prev->prev);
-				prefetch((uint8_t *)(skb_prev->prev) + 128);
-				prefetch((uint8_t *)(skb_prev->prev) + 192);
+	cur_skb =  list_first_entry(&rx_list, struct sk_buff, list);
+	if (likely(cur_skb)) {
+		/*
+		 * Prefetch the packet data for the next skbuff, and the skbuff
+		 * structure for next and next-next skbuffs for optimal performance.
+		 */
+		list_for_each_entry_safe_reverse(cur_skb, skb_prev, &rx_list, list) {
+			if (likely(skb_prev)) {
+				if (likely(!list_is_first((struct list_head *)skb_prev, &rx_list))) {
+					prefetch(skb_prev->prev);
+					prefetch((uint8_t *)(skb_prev->prev) + 64);
+					prefetch((uint8_t *)(skb_prev->prev) + 128);
+					prefetch((uint8_t *)(skb_prev->prev) + 192);
+				}
+				prefetch(skb_prev->data);
+				prefetch(skb_shinfo(skb_prev));
 			}
-			prefetch(skb_prev->data);
+			cur_skb->protocol = eth_type_trans(cur_skb, cur_skb->dev);
 		}
-		cur_skb->protocol = eth_type_trans(cur_skb, cur_skb->dev);
-	}
 
-	/*
-	 * Send packets upto the network stack
-	 */
-	netif_receive_skb_list(&rx_list);
+		/*
+		 * Send packets upto the network stack
+		 */
+		netif_receive_skb_list(&rx_list);
+	}
 
 	return work_done;
 }
