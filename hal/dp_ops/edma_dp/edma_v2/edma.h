@@ -75,56 +75,6 @@
 #define CYCLE_PER_TIMER_UNIT	128
 #define MICROSEC_TO_TIMER_UNIT(x)	(((x) * EDMA_CLK_FREQ) / CYCLE_PER_TIMER_UNIT)
 
-/*
- * EDMA common clocks
- */
-#define EDMA_CSR_CLK			"nss-csr-clk"
-#define EDMA_NSSNOC_CSR_CLK		"nss-nssnoc-csr-clk"
-#define EDMA_IMEM_QSB_CLK		"nss-imem-qsb-clk"
-#define EDMA_NSSNOC_IMEM_QSB_CLK	"nss-nssnoc-imem-qsb-clk"
-#define EDMA_IMEM_AHB_CLK		"nss-imem-ahb-clk"
-#define EDMA_NSSNOC_IMEM_AHB_CLK	"nss-nssnoc-imem-ahb-clk"
-#define EDMA_MEM_NOC_NSSNOC_CLK		"nss-mem-noc-nssnoc-clk"
-#define EDMA_TBU_CLK			"nss-tbu-clk"
-#define EDMA_TS_CLK			"nss-ts-clk"
-#define EDMA_NSSCC_CLK			"nss-nsscc-clk"
-#define EDMA_NSSCFG_CLK			"nss-nsscfg-clk"
-#define EDMA_NSSCNOC_ATB_CLK		"nss-nsscnoc-atb-clk"
-#define EDMA_NSSNOC_MEM_NOC_1_CLK	"nss-nssnoc-mem-noc-1-clk"
-#define EDMA_NSSNOC_MEMNOC_CLK		"nss-nssnoc-memnoc-clk"
-#define EDMA_NSSNOC_NSSCC_CLK		"nss-nssnoc-nsscc-clk"
-#define EDMA_NSSNOC_PCNOC_1_CLK		"nss-nssnoc-pcnoc-1-clk"
-#define EDMA_NSSNOC_QOSGEN_REF_CLK	"nss-nssnoc-qosgen-ref-clk"
-#define EDMA_NSSNOC_SNOC_1_CLK		"nss-nssnoc-snoc-1-clk"
-#define EDMA_NSSNOC_SNOC_CLK		"nss-nssnoc-snoc-clk"
-#define EDMA_NSSNOC_TIMEOUT_REF_CLK	"nss-nssnoc-timeout-ref-clk"
-#define EDMA_NSSNOC_XO_DCD_CLK		"nss-nssnoc-xo-dcd-clk"
-
-/*
- * EDMA common clock's frequencies
- */
-#define EDMA_CSR_CLK_FREQ			100000000
-#define EDMA_NSSNOC_CSR_CLK_FREQ		100000000
-#define EDMA_IMEM_QSB_CLK_FREQ			353000000
-#define EDMA_NSSNOC_IMEM_QSB_CLK_FREQ		353000000
-#define EDMA_IMEM_AHB_CLK_FREQ			100000000
-#define EDMA_NSSNOC_IMEM_AHB_CLK_FREQ		100000000
-#define EDMA_MEM_NOC_NSSNOC_CLK_FREQ		533333333
-#define EDMA_TBU_CLK_FREQ			533333333
-#define EDMA_TS_CLK_FREQ			24000000
-#define EDMA_NSSCC_CLK_FREQ			100000000
-#define EDMA_NSSCFG_CLK_FREQ			100000000
-#define EDMA_NSSCNOC_ATB_CLK_FREQ		240000000
-#define EDMA_NSSNOC_MEM_NOC_1_CLK_FREQ		533333333
-#define EDMA_NSSNOC_MEMNOC_CLK_FREQ		533333333
-#define EDMA_NSSNOC_NSSCC_CLK_FREQ		100000000
-#define EDMA_NSSNOC_PCNOC_1_CLK_FREQ		100000000
-#define EDMA_NSSNOC_QOSGEN_REF_CLK_FREQ		6000000
-#define EDMA_NSSNOC_SNOC_1_CLK_FREQ		342857143
-#define EDMA_NSSNOC_SNOC_CLK_FREQ		342857143
-#define EDMA_NSSNOC_TIMEOUT_REF_CLK_FREQ	6000000
-#define EDMA_NSSNOC_XO_DCD_CLK_FREQ		24000000
-
 #define EDMA_DESC_AVAIL_COUNT(head, tail, max) (((head) - (tail)) + (max)) & ((max) - 1)
 
 /*

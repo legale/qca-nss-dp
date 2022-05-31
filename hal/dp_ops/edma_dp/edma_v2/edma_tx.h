@@ -26,8 +26,8 @@
 #define EDMA_TXDESC_PRI_DESC(R, i)	EDMA_GET_PDESC(R, i, struct edma_pri_txdesc)
 #define EDMA_TXDESC_SEC_DESC(R, i)	EDMA_GET_SDESC(R, i, struct edma_sec_txdesc)
 
-#define EDMA_MAX_TXDESC_RINGS		32	/* Max TxDesc rings */
-#define EDMA_MAX_TXCMPL_RINGS		32	/* Max TxCmpl rings */
+#define EDMA_MAX_TXDESC_RINGS		NSS_DP_EDMA_MAX_TXDESC_RINGS
+#define EDMA_MAX_TXCMPL_RINGS		NSS_DP_EDMA_MAX_TXCMPL_RINGS
 #define EDMA_TXCMPL_RING_PER_CORE_MAX	EDMA_MAX_PORTS
 						/* Includes the one additional for VP */
 #define EDMA_TX_MAX_PRIORITY_LEVEL	1

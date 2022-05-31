@@ -47,7 +47,7 @@ NSS_DP_INCLUDE += -I$(obj)/hal/dp_ops/syn_gmac_dp/include
 ccflags-y += -DNSS_DP_IPQ50XX -DNSS_DP_ENABLE_NAPI_GRO
 endif
 
-ifeq ($(SoC),$(filter $(SoC),ipq95xx))
+ifeq ($(SoC),$(filter $(SoC),ipq95xx ipq53xx))
 qca-nss-dp-objs += nss_dp_vp_main.o \
 		   hal/dp_ops/edma_dp/edma_v2/edma.o \
 		   hal/dp_ops/edma_dp/edma_v2/edma_cfg_rx.o \
@@ -62,7 +62,15 @@ qca-nss-dp-objs += nss_dp_vp_main.o \
 		   hal/gmac_ops/syn/xgmac/syn_if.o
 NSS_DP_INCLUDE += -I$(obj)/hal/dp_ops/edma_dp/edma_v2
 NSS_DP_INCLUDE += -I$(obj)/hal/dp_ops/edma_dp/edma_v2/include
-ccflags-y += -DNSS_DP_IPQ95XX -DNSS_DP_ENABLE_NAPI_GRO -DNSS_DP_VP_SUPPORT
+ccflags-y += -DNSS_DP_ENABLE_NAPI_GRO -DNSS_DP_VP_SUPPORT -DNSS_DP_EDMA_V2
+endif
+
+ifeq ($(SoC),$(filter $(SoC),ipq53xx))
+ccflags-y += -DNSS_DP_IPQ53XX
+endif
+
+ifeq ($(SoC),$(filter $(SoC),ipq95xx))
+ccflags-y += -DNSS_DP_IPQ95XX
 endif
 
 ccflags-y += $(NSS_DP_INCLUDE)

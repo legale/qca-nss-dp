@@ -41,10 +41,10 @@ struct qcom_ethtool_stats {
  * Array of strings describing data plane statistics
  */
 static const struct qcom_ethtool_stats qcom_gstrings_stats[] = {
-#if defined(NSS_DP_IPQ95XX)
+#if defined(NSS_DP_EDMA_V2)
 	/*
 	 * Per GMAC DMA driver statistics are
-	 * supported today only for IPQ95xx.
+	 * supported only for IPQ95xx and IPQ53XX.
 	 */
 	{"rx_bytes", QCOM_STAT(rx_bytes)},
 	{"rx_packets", QCOM_STAT(rx_packets)},

@@ -1,6 +1,4 @@
 /*
- * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- *
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -142,50 +140,68 @@ int32_t nss_dp_hal_configure_clocks(void *ctx)
 		return -1;
 	}
 
-	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_IMEM_QSB_CLK,
-					NSS_DP_EDMA_IMEM_QSB_CLK_FREQ);
+	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_CC_CE_APB_CLK,
+					NSS_DP_EDMA_CC_CE_APB_CLK_FREQ);
 	if (err) {
 		return -1;
 	}
 
-	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_NSSNOC_IMEM_QSB_CLK,
-					NSS_DP_EDMA_NSSNOC_IMEM_QSB_CLK_FREQ);
+	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_CC_CE_AXI_CLK,
+					NSS_DP_EDMA_CC_CE_AXI_CLK_FREQ);
 	if (err) {
 		return -1;
 	}
 
-	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_IMEM_AHB_CLK,
-					NSS_DP_EDMA_IMEM_AHB_CLK_FREQ);
+	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_CC_NSSNOC_CE_APB_CLK,
+					NSS_DP_EDMA_CC_NSSNOC_CE_APB_CLK_FREQ);
 	if (err) {
 		return -1;
 	}
 
-	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_NSSNOC_IMEM_AHB_CLK,
-					NSS_DP_EDMA_NSSNOC_IMEM_AHB_CLK_FREQ);
+	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_CC_NSSNOC_CE_AXI_CLK,
+					NSS_DP_EDMA_CC_NSSNOC_CE_AXI_CLK_FREQ);
 	if (err) {
 		return -1;
 	}
 
-	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_MEM_NOC_NSSNOC_CLK,
-					NSS_DP_EDMA_MEM_NOC_NSSNOC_CLK_FREQ);
+	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_SNOC_NSSNOC_CLK,
+					NSS_DP_EDMA_SNOC_NSSNOC_CLK_FREQ);
 	if (err) {
 		return -1;
 	}
 
-	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_TBU_CLK,
-					NSS_DP_EDMA_TBU_CLK_FREQ);
+	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_SNOC_NSSNOC_1_CLK,
+					NSS_DP_EDMA_SNOC_NSSNOC_1_CLK_FREQ);
 	if (err) {
 		return -1;
 	}
 
-	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_NSSNOC_MEM_NOC_1_CLK,
-					NSS_DP_EDMA_NSSNOC_MEM_NOC_1_CLK_FREQ);
+	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_MEM_NOC_AHB_CLK,
+					NSS_DP_EDMA_MEM_NOC_AHB_CLK_FREQ);
 	if (err) {
 		return -1;
 	}
 
-	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_NSSNOC_MEMNOC_CLK,
-					NSS_DP_EDMA_NSSNOC_MEMNOC_CLK_FREQ);
+	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_MEM_NOC_SNOC_AXI_CLK,
+					NSS_DP_EDMA_MEM_NOC_SNOC_AXI_CLK_FREQ);
+	if (err) {
+		return -1;
+	}
+
+	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_MEM_NOC_APSS_AXI_CLK,
+					NSS_DP_EDMA_MEM_NOC_APSS_AXI_CLK_FREQ);
+	if (err) {
+		return -1;
+	}
+
+	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_MEM_NOC_QOSGEN_EXTREF_CLK,
+					NSS_DP_EDMA_MEM_NOC_QOSGEN_EXTREF_CLK_FREQ);
+	if (err) {
+		return -1;
+	}
+
+	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_MEM_NOC_TS_CLK,
+					NSS_DP_EDMA_MEM_NOC_TS_CLK_FREQ);
 	if (err) {
 		return -1;
 	}
@@ -199,20 +215,9 @@ int32_t nss_dp_hal_configure_clocks(void *ctx)
  */
 int32_t nss_dp_hal_hw_reset(void *ctx)
 {
-	struct reset_control *edma_hw_rst;
-	struct platform_device *pdev = (struct platform_device *)ctx;
-
-	edma_hw_rst = devm_reset_control_get(&pdev->dev, EDMA_HW_RESET_ID);
-	if (IS_ERR(edma_hw_rst)) {
-		return -EINVAL;
-	}
-
-	reset_control_assert(edma_hw_rst);
-	udelay(100);
-
-	reset_control_deassert(edma_hw_rst);
-	udelay(100);
-
+	/*
+	 * PPE Reset will take care of EDMA Hardware Reset for ipq53xx
+	 */
 	return 0;
 }
 
@@ -225,7 +230,10 @@ bool nss_dp_hal_init(void)
 	/*
 	 * Bail out on not supported platform
 	 */
-	if (!of_machine_is_compatible("qcom,ipq9574")) {
+	/*
+	 * TODO: Update SoC name during SOD
+	 */
+	if (!of_machine_is_compatible("qcom,devsoc")) {
 		return false;
 	}
 

@@ -46,7 +46,7 @@
 #define NSS_DP_RX_BUFFER_SIZE		1984
 #endif
 
-#if defined(NSS_DP_IPQ95XX)
+#if defined(NSS_DP_EDMA_V2)
 /*
  * Rx rings flow control threshold values
  *
@@ -165,7 +165,7 @@ extern struct nss_dp_data_plane_ctx dp_global_data_plane_ctx[NSS_DP_MAX_PORTS];
 extern int nss_dp_rx_napi_budget;
 extern int nss_dp_tx_napi_budget;
 
-#if defined(NSS_DP_IPQ95XX)
+#if defined(NSS_DP_EDMA_V2)
 extern int nss_dp_rx_fc_xon;
 extern int nss_dp_rx_fc_xoff;
 extern int nss_dp_rx_ac_fc_threshold;
@@ -223,7 +223,7 @@ bool nss_dp_is_phy_dev(struct net_device *dev);
  *
  * Note: We are not using MACID 7 for indexing.
  */
-#if defined(NSS_DP_IPQ95XX)
+#if defined(NSS_DP_EDMA_V2)
 static inline uint32_t nss_dp_get_idx_from_macid(uint32_t macid)
 {
 	if (likely(macid < NSS_DP_VP_MAC_ID)) {

@@ -1,6 +1,4 @@
 /*
- * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- *
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
@@ -20,7 +18,7 @@
 #define __NSS_DP_ARCH_H__
 
 #define NSS_DP_VP_HAL_MAX_PORTS		1
-#define NSS_DP_HAL_MAX_PORTS		6
+#define NSS_DP_HAL_MAX_PORTS		2
 #define NSS_DP_MAX_PORTS		(NSS_DP_HAL_MAX_PORTS + NSS_DP_VP_HAL_MAX_PORTS)
 #define NSS_DP_HAL_CPU_NUM		4
 #define NSS_DP_HAL_START_IFNUM		1
@@ -33,10 +31,10 @@
 /*
  * Number of Max Tx/Rx Rings supported
  */
-#define NSS_DP_EDMA_MAX_RXDESC_RINGS		24	/* Max RxDesc rings */
-#define NSS_DP_EDMA_MAX_RXFILL_RINGS		 8	/* Max RxFill rings */
-#define NSS_DP_EDMA_MAX_TXCMPL_RINGS		32	/* Max TxCmpl rings */
-#define NSS_DP_EDMA_MAX_TXDESC_RINGS		32	/* Max TxDesc rings */
+#define NSS_DP_EDMA_MAX_RXDESC_RINGS	16	/* Max RxDesc rings */
+#define NSS_DP_EDMA_MAX_RXFILL_RINGS	 8	/* Max RxFill rings */
+#define NSS_DP_EDMA_MAX_TXCMPL_RINGS	24	/* Max TxCmpl rings */
+#define NSS_DP_EDMA_MAX_TXDESC_RINGS	24	/* Max TxDesc rings */
 
 /*
  * TX/RX NAPI budget
@@ -60,14 +58,17 @@
 #define NSS_DP_EDMA_NSSNOC_SNOC_CLK		"nss-nssnoc-snoc-clk"
 #define NSS_DP_EDMA_NSSNOC_TIMEOUT_REF_CLK	"nss-nssnoc-timeout-ref-clk"
 #define NSS_DP_EDMA_NSSNOC_XO_DCD_CLK		"nss-nssnoc-xo-dcd-clk"
-#define NSS_DP_EDMA_IMEM_QSB_CLK		"nss-imem-qsb-clk"
-#define NSS_DP_EDMA_NSSNOC_IMEM_QSB_CLK		"nss-nssnoc-imem-qsb-clk"
-#define NSS_DP_EDMA_IMEM_AHB_CLK		"nss-imem-ahb-clk"
-#define NSS_DP_EDMA_NSSNOC_IMEM_AHB_CLK		"nss-nssnoc-imem-ahb-clk"
-#define NSS_DP_EDMA_MEM_NOC_NSSNOC_CLK		"nss-mem-noc-nssnoc-clk"
-#define NSS_DP_EDMA_TBU_CLK			"nss-tbu-clk"
-#define NSS_DP_EDMA_NSSNOC_MEM_NOC_1_CLK	"nss-nssnoc-mem-noc-1-clk"
-#define NSS_DP_EDMA_NSSNOC_MEMNOC_CLK		"nss-nssnoc-memnoc-clk"
+#define NSS_DP_EDMA_CC_CE_APB_CLK		"nss-ce-ahb-clk"
+#define NSS_DP_EDMA_CC_CE_AXI_CLK		"nss-ce-axi-clk"
+#define NSS_DP_EDMA_CC_NSSNOC_CE_APB_CLK	"nss-nssnoc-ce-ahb-clk"
+#define NSS_DP_EDMA_CC_NSSNOC_CE_AXI_CLK	"nss-nssnoc-ce-axi-clk"
+#define NSS_DP_EDMA_SNOC_NSSNOC_CLK		"nss-snoc-nssnoc-clk"
+#define NSS_DP_EDMA_SNOC_NSSNOC_1_CLK		"nss-snoc-nssnoc-1-clk"
+#define NSS_DP_EDMA_MEM_NOC_AHB_CLK		"nss-mem-noc-ahb-clk"
+#define NSS_DP_EDMA_MEM_NOC_SNOC_AXI_CLK	"nss-mem-noc-snoc-axi-clk"
+#define NSS_DP_EDMA_MEM_NOC_APSS_AXI_CLK	"nss-mem-noc-apss-axi-clk"
+#define NSS_DP_EDMA_MEM_NOC_QOSGEN_EXTREF_CLK	"nss-mem-noc-qosgen-extref-clk"
+#define NSS_DP_EDMA_MEM_NOC_TS_CLK		"nss-mem-noc-ts-clk"
 
 /*
  * EDMA clock's frequencies
@@ -85,14 +86,17 @@
 #define NSS_DP_EDMA_NSSNOC_SNOC_CLK_FREQ		342857143
 #define NSS_DP_EDMA_NSSNOC_TIMEOUT_REF_CLK_FREQ		6000000
 #define NSS_DP_EDMA_NSSNOC_XO_DCD_CLK_FREQ		24000000
-#define NSS_DP_EDMA_IMEM_QSB_CLK_FREQ			353000000
-#define NSS_DP_EDMA_NSSNOC_IMEM_QSB_CLK_FREQ		353000000
-#define NSS_DP_EDMA_IMEM_AHB_CLK_FREQ			100000000
-#define NSS_DP_EDMA_NSSNOC_IMEM_AHB_CLK_FREQ		100000000
-#define NSS_DP_EDMA_MEM_NOC_NSSNOC_CLK_FREQ		533333333
-#define NSS_DP_EDMA_TBU_CLK_FREQ			533333333
-#define NSS_DP_EDMA_NSSNOC_MEM_NOC_1_CLK_FREQ		533333333
-#define NSS_DP_EDMA_NSSNOC_MEMNOC_CLK_FREQ		533333333
+#define NSS_DP_EDMA_CC_CE_APB_CLK_FREQ			200000000
+#define NSS_DP_EDMA_CC_CE_AXI_CLK_FREQ			200000000
+#define NSS_DP_EDMA_CC_NSSNOC_CE_APB_CLK_FREQ		200000000
+#define NSS_DP_EDMA_CC_NSSNOC_CE_AXI_CLK_FREQ		200000000
+#define NSS_DP_EDMA_SNOC_NSSNOC_CLK_FREQ		266666666
+#define NSS_DP_EDMA_SNOC_NSSNOC_1_CLK_FREQ		266666666
+#define NSS_DP_EDMA_MEM_NOC_AHB_CLK_FREQ		100000000
+#define NSS_DP_EDMA_MEM_NOC_SNOC_AXI_CLK_FREQ		266666666
+#define NSS_DP_EDMA_MEM_NOC_APSS_AXI_CLK_FREQ		533333333
+#define NSS_DP_EDMA_MEM_NOC_QOSGEN_EXTREF_CLK_FREQ	6000000
+#define NSS_DP_EDMA_MEM_NOC_TS_CLK_FREQ			75000000
 
 /**
  * nss_dp_hal_gmac_stats

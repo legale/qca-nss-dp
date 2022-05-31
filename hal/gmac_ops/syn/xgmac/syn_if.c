@@ -38,10 +38,10 @@ struct syn_ethtool_stats {
  * Array of strings describing data plane statistics
  */
 static const struct syn_ethtool_stats syn_gstrings_stats[] = {
-#if defined(NSS_DP_IPQ95XX)
+#if defined(NSS_DP_EDMA_V2)
 	/*
 	 * Per GMAC DMA driver statistics are
-	 * supported today only for IPQ95xx.
+	 * supported only for IPQ95xx and IPQ53xx.
 	 */
 	{"rx_bytes", SYN_STAT(rx_bytes)},
 	{"rx_packets", SYN_STAT(rx_packets)},
