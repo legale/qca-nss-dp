@@ -597,10 +597,12 @@ drop:
  */
 static void edma_if_set_features(struct nss_dp_data_plane_ctx *dpc)
 {
-	/*
-	 * TODO - add flags to support HIGHMEM/cksum offload VLAN
-	 * the features are enabled.
-	 */
+	struct net_device *netdev = dpc->dev;
+
+	netdev->features |= NETIF_F_GRO;
+	netdev->hw_features |= NETIF_F_GRO;
+	netdev->vlan_features |= NETIF_F_GRO;
+	netdev->wanted_features |= NETIF_F_GRO;
 }
 
 /* TODO - check if this is needed */

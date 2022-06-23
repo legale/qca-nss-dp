@@ -410,8 +410,12 @@ static uint32_t edma_clean_rx(struct edma_hw *ehw,
 		if (unlikely(EDMA_RXPH_SERVICE_CODE_GET(rxph) ==
 					NSS_PTP_EVENT_SERVICE_CODE))
 			nss_phy_tstamp_rx_buf(ndev, skb);
-		else
-			netif_receive_skb(skb);
+		else {
+			if (likely(ndev->features & NETIF_F_GRO))
+				napi_gro_receive(&ehw->napi, skb);
+			else
+				netif_receive_skb(skb);
+		}
 
 next_rx_desc:
 		/*
