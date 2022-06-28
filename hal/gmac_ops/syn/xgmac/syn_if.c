@@ -350,45 +350,6 @@ static void syn_send_pause_frame(struct nss_gmac_hal_dev *nghd)
 }
 
 /*
- * syn_start
- */
-static int32_t syn_start(struct nss_gmac_hal_dev *nghd)
-{
-	BUG_ON(nghd == NULL);
-
-	syn_tx_enable(nghd);
-	syn_rx_enable(nghd);
-	syn_set_full_duplex(nghd);
-
-	netdev_dbg(nghd->netdev,
-			"%s: mac_base:0x%px tx_enable:0x%x rx_enable:0x%x\n",
-			__func__,
-			nghd->mac_base,
-			hal_read_relaxed_reg(nghd->mac_base,
-				SYN_MAC_TX_CONFIG),
-			hal_read_relaxed_reg(nghd->mac_base,
-				SYN_MAC_RX_CONFIG));
-
-	return 0;
-}
-
-/*
- * syn_stop
- */
-static int32_t syn_stop(struct nss_gmac_hal_dev *nghd)
-{
-	BUG_ON(nghd == NULL);
-
-	syn_tx_disable(nghd);
-	syn_rx_disable(nghd);
-
-	netdev_dbg(nghd->netdev, "%s: Stopping mac_base:0x%px\n", __func__,
-		   nghd->mac_base);
-
-	return 0;
-}
-
-/*
  * syn_init()
  */
 static void *syn_init(struct nss_gmac_hal_platform_data *gmacpdata)
@@ -524,8 +485,8 @@ static void syn_exit(struct nss_gmac_hal_dev *nghd)
  */
 struct nss_gmac_hal_ops syn_gmac_ops = {
 	.init = &syn_init,
-	.start = &syn_start,
-	.stop = &syn_stop,
+	.start = NULL,
+	.stop = NULL,
 	.exit = &syn_exit,
 	.setmacaddr = &syn_set_mac_address,
 	.getmacaddr = &syn_get_mac_address,

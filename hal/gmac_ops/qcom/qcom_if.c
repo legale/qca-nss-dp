@@ -346,37 +346,6 @@ static void qcom_stop_pause_frame(struct nss_gmac_hal_dev *nghd)
 }
 
 /*
- * qcom_start()
- */
-static int32_t qcom_start(struct nss_gmac_hal_dev *nghd)
-{
-	qcom_set_full_duplex(nghd);
-
-	qcom_tx_enable(nghd);
-	qcom_rx_enable(nghd);
-
-	netdev_dbg(nghd->netdev, "%s: mac_base:0x%px mac_enable:0x%x\n",
-			__func__, nghd->mac_base,
-			hal_read_relaxed_reg(nghd->mac_base, QCOM_MAC_ENABLE));
-
-	return 0;
-}
-
-/*
- * qcom_stop()
- */
-static int32_t qcom_stop(struct nss_gmac_hal_dev *nghd)
-{
-	qcom_tx_disable(nghd);
-	qcom_rx_disable(nghd);
-
-	netdev_dbg(nghd->netdev, "%s: mac_base:0x%px mac_enable:0x%x\n",
-			__func__, nghd->mac_base,
-			hal_read_relaxed_reg(nghd->mac_base, QCOM_MAC_ENABLE));
-	return 0;
-}
-
-/*
  * qcom_init()
  */
 static void *qcom_init(struct nss_gmac_hal_platform_data *gmacpdata)
@@ -502,8 +471,8 @@ static void qcom_exit(struct nss_gmac_hal_dev *nghd)
  */
 struct nss_gmac_hal_ops qcom_gmac_ops = {
 	.init = &qcom_init,
-	.start = &qcom_start,
-	.stop = &qcom_stop,
+	.start = NULL,
+	.stop = NULL,
 	.exit = &qcom_exit,
 	.setmacaddr = &qcom_set_mac_address,
 	.getmacaddr = &qcom_get_mac_address,

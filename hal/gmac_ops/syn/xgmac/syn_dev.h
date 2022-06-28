@@ -2,6 +2,8 @@
  **************************************************************************
  * Copyright (c) 2016,2020-2021 The Linux Foundation. All rights reserved.
  *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all copies.
@@ -93,40 +95,6 @@ static inline void syn_clear_mac_ctrl(
 }
 
 /*
- * syn_rx_enable()
- */
-static inline void syn_rx_enable(struct nss_gmac_hal_dev *nghd)
-{
-	hal_set_reg_bits(nghd->mac_base, SYN_MAC_RX_CONFIG, SYN_MAC_RX_ENABLE);
-	hal_set_reg_bits(nghd->mac_base, SYN_MAC_PACKET_FILTER, SYN_MAC_RX_ENABLE);
-}
-
-/*
- * syn_rx_disable()
- */
-static inline void syn_rx_disable(struct nss_gmac_hal_dev *nghd)
-{
-	hal_clear_reg_bits(nghd->mac_base, SYN_MAC_RX_CONFIG, SYN_MAC_RX_ENABLE);
-}
-
-/*
- * syn_tx_enable()
- */
-static inline void syn_tx_enable(struct nss_gmac_hal_dev *nghd)
-{
-	hal_set_reg_bits(nghd->mac_base, SYN_MAC_TX_CONFIG, SYN_MAC_TX_ENABLE);
-}
-
-/*
- * syn_tx_disable()
- */
-static inline void syn_tx_disable(struct nss_gmac_hal_dev *nghd)
-{
-	hal_clear_reg_bits(nghd->mac_base, SYN_MAC_TX_CONFIG,
-			SYN_MAC_TX_ENABLE);
-}
-
-/*
  * syn_set_mmc_stats()
  */
 static inline void syn_set_mmc_stats(struct nss_gmac_hal_dev *nghd)
@@ -153,16 +121,6 @@ static inline void syn_rx_jumbo_frame_disable(
 {
 	hal_clear_reg_bits(nghd->mac_base, SYN_MAC_RX_CONFIG,
 			SYN_MAC_JUMBO_FRAME_ENABLE);
-}
-
-/*
- * syn_set_full_duplex()
- */
-static inline void syn_set_full_duplex(
-		struct nss_gmac_hal_dev *nghd)
-{
-	/* TBD */
-	return;
 }
 
 /*
