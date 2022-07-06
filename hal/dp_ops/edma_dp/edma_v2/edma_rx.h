@@ -262,5 +262,6 @@ struct edma_rxdesc_ring {
 irqreturn_t edma_rx_handle_irq(int irq, void *ctx);
 int edma_rx_alloc_buffer(struct edma_rxfill_ring *rxfill_ring, int alloc_count);
 int edma_rx_napi_poll(struct napi_struct *napi, int budget);
+bool edma_rx_phy_tstamp_buf(__attribute__((unused))void *app_data, struct sk_buff *skb);
 
 #endif	/* __EDMA_RX_H__ */

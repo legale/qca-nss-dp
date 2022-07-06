@@ -562,6 +562,23 @@ static uint32_t edma_tx_avail_desc(struct edma_txdesc_ring *txdesc_ring, uint32_
 }
 
 /*
+ * edma_tx_phy_tstamp_buf()
+ *	Send skb for PHY timestamping
+ */
+static inline void edma_tx_phy_tstamp_buf(struct net_device *ndev, struct sk_buff *skb)
+{
+	/*
+	 * Function drv->txtstamp will create a clone of skb if necessary,
+	 * the PTP_CLASS_ value 0 is passed to phy driver, which will be
+	 * set to the correct PTP class value by calling ptp_classify_raw
+	 * in the drv->txtstamp function.
+	 */
+	if (ndev && ndev->phydev && ndev->phydev->drv && ndev->phydev->drv->txtstamp) {
+		ndev->phydev->drv->txtstamp(ndev->phydev, skb, 0);
+	}
+}
+
+/*
  * edma_tx_ring_xmit()
  *	API to transmit a packet.
  */
@@ -588,6 +605,13 @@ enum edma_tx edma_tx_ring_xmit(struct net_device *netdev, struct nss_dp_vp_tx_in
 			u64_stats_update_end(&txdesc_stats->syncp);
 			return EDMA_TX_FAIL_NO_DESC;
 		}
+	}
+
+	/*
+	 * Deliver the ptp packet to phy driver for TX timestamping
+	 */
+	if (unlikely(skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)) {
+		edma_tx_phy_tstamp_buf(netdev, skb);
 	}
 
 	/*

@@ -26,6 +26,7 @@
 #include <fal/fal_qm.h>
 #include <fal/fal_rss_hash.h>
 #include <fal/fal_servcode.h>
+#include <ppe_drv_sc.h>
 #include <linux/clk.h>
 #include "edma.h"
 #include "edma_cfg_tx.h"
@@ -222,6 +223,11 @@ void edma_cleanup(bool is_dp_override)
 	 * Clean the debugfs entries for the EDMA
 	 */
 	edma_debugfs_exit();
+
+	/*
+	 * Unregister PTP service code callback function
+	 */
+	ppe_drv_sc_unregister_cb(PPE_DRV_SC_PTP);
 
 	/*
 	 * Mark initialize false, so that we do not
@@ -1161,6 +1167,11 @@ int edma_init(void)
 		ret = -EFAULT;
 		goto edma_hw_init_fail;
 	}
+
+	/*
+	 * Register PTP service code callback function
+	 */
+	ppe_drv_sc_register_cb(PPE_DRV_SC_PTP, edma_rx_phy_tstamp_buf, NULL);
 
 	/*
 	 * We add NAPIs and register IRQs at the time of the first netdev open
