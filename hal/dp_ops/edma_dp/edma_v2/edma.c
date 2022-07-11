@@ -43,6 +43,7 @@ struct edma_gbl_ctx edma_gbl_ctx;
 static char edma_txcmpl_irq_name[EDMA_MAX_TXCMPL_RINGS][EDMA_IRQ_NAME_SIZE];
 static char edma_rxdesc_irq_name[EDMA_MAX_RXDESC_RINGS][EDMA_IRQ_NAME_SIZE];
 
+#if defined(NSS_DP_POINT_OFFLOAD)
 /*
  * nss_dp_point_offload_info_get()
  *	Get point offload ring information
@@ -56,6 +57,7 @@ void nss_dp_point_offload_info_get(uint32_t *txdesc_num, uint32_t *txcmpl_num,
 	*rxdesc_num = edma_gbl_ctx.rxdesc_point_offload_ring;
 }
 EXPORT_SYMBOL(nss_dp_point_offload_info_get);
+#endif
 
 /*
  * edma_disable_interrupts()
@@ -818,6 +820,7 @@ static int edma_hw_init(struct edma_gbl_ctx *egc)
 	edma_cfg_tx_mapping(egc);
 	edma_cfg_rx_mapping(egc);
 #if defined(NSS_DP_POINT_OFFLOAD)
+	edma_cfg_tx_point_offload_mapping(egc);
 	edma_cfg_rx_point_offload_mapping(egc);
 #endif
 

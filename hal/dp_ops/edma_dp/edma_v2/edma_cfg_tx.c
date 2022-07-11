@@ -411,6 +411,47 @@ void edma_cfg_tx_mapping(struct edma_gbl_ctx *egc)
 	edma_debug("EDMA_REG_TXDESC2CMPL_MAP_5: 0x%x\n", edma_reg_read(EDMA_REG_TXDESC2CMPL_MAP_5));
 }
 
+#if defined(NSS_DP_POINT_OFFLOAD)
+/*
+ * edma_cfg_tx_point_offload_mapping()
+ *	API to setup TX ring mapping
+ */
+void edma_cfg_tx_point_offload_mapping(struct edma_gbl_ctx *egc)
+{
+	uint32_t data, reg, ring_id = egc->txdesc_point_offload_ring;
+
+	if ((ring_id >= 0) && (ring_id <= 5)) {
+		reg = EDMA_REG_TXDESC2CMPL_MAP_0;
+	} else if ((ring_id >= 6) && (ring_id <= 11)) {
+		reg = EDMA_REG_TXDESC2CMPL_MAP_1;
+	} else if ((ring_id >= 12) && (ring_id <= 17)) {
+		reg = EDMA_REG_TXDESC2CMPL_MAP_2;
+	} else if ((ring_id >= 18) && (ring_id <= 23)) {
+		reg = EDMA_REG_TXDESC2CMPL_MAP_3;
+	} else if ((ring_id >= 24) && (ring_id <= 29)) {
+		reg = EDMA_REG_TXDESC2CMPL_MAP_4;
+	} else {
+		reg = EDMA_REG_TXDESC2CMPL_MAP_5;
+	}
+
+	edma_debug("Configure point offload TXDESC:%u to use TXCMPL:%u\n", ring_id, egc->txcmpl_point_offload_ring);
+
+	/*
+	 * Set the Tx complete descriptor ring number in the mapping register.
+	 * E.g. If (txcmpl ring)desc_index = 31, (txdesc ring)i = 28.
+	 * 	reg = EDMA_REG_TXDESC2CMPL_MAP_4
+	 * 	data |= (desc_index & 0x1F) << ((i % 6) * 5);
+	 * 	data |= (0x1F << 20); -
+	 * 	This sets 11111 at 20th bit of register EDMA_REG_TXDESC2CMPL_MAP_4
+	 */
+	data = edma_reg_read(reg);
+	data |= (egc->txcmpl_point_offload_ring & EDMA_TXDESC2CMPL_MAP_TXDESC_MASK) << ((ring_id % 6) * 5);
+	edma_reg_write(reg, data);
+
+	egc->tx_to_txcmpl_map[ring_id] = egc->txcmpl_point_offload_ring;
+}
+#endif
+
 /*
  * edma_cfg_tx_rings_setup()
  *	Allocate/setup resources for EDMA rings
