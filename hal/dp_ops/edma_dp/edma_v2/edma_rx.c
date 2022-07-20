@@ -131,11 +131,6 @@ static inline int edma_rx_alloc_buffer_list(struct edma_rxfill_ring *rxfill_ring
 		rxfill_desc = EDMA_RXFILL_DESC(rxfill_ring, prod_idx);
 
 		/*
-		 * Prefetch the current rxfill descriptor.
-		 */
-		prefetch(rxfill_desc);
-
-		/*
 		 * Detach the current SKB to use from the list,
 		 * and prefetch the next SKB's cache lines.
 		 */
@@ -213,25 +208,6 @@ static inline int edma_rx_alloc_buffer_list(struct edma_rxfill_ring *rxfill_ring
 	}
 
 	if (likely(num_alloc)) {
-		uint16_t end_idx =
-			(start_idx + num_alloc) & EDMA_RX_RING_SIZE_MASK;
-
-		rxfill_desc = EDMA_RXFILL_DESC(rxfill_ring, start_idx);
-
-		/*
-		 * Write-back all the cached descriptors
-		 * that are processed.
-		 */
-		if (end_idx > start_idx) {
-			dmac_clean_range_no_dsb((void *)rxfill_desc,
-					(void *)(rxfill_desc + num_alloc));
-		} else {
-			dmac_clean_range_no_dsb((void *)rxfill_ring->desc,
-					(void *)(rxfill_ring->desc + end_idx));
-			dmac_clean_range_no_dsb((void *)rxfill_desc,
-					(void *)(rxfill_ring->desc +
-							EDMA_RX_RING_SIZE));
-		}
 
 		/*
 		 * Make sure the information written to the descriptors
