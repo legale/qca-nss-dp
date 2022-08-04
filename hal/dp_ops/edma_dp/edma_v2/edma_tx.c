@@ -36,7 +36,7 @@ uint32_t edma_tx_complete(uint32_t work_to_do, struct edma_txcmpl_ring *txcmpl_r
 {
 	struct edma_txcmpl_desc *txcmpl;
 	struct edma_tx_cmpl_stats *txcmpl_stats = &txcmpl_ring->tx_cmpl_stats;
-	uint32_t prod_idx;
+	uint32_t prod_idx = 0;
 	uint32_t cons_idx;
 	uint32_t data;
 	struct sk_buff *skb;
