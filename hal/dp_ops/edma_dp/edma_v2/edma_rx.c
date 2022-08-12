@@ -307,7 +307,7 @@ static void edma_rx_handle_scatter_frames(struct edma_gbl_ctx *egc,
 	struct nss_dp_dev *dp_dev;
 	struct edma_pcpu_stats *pcpu_stats;
 	struct edma_rx_stats *rx_stats;
-	struct sk_buff *rxdesc_ring_head;
+	struct sk_buff *skb_head;
 	struct net_device *dev;
 	uint32_t pkt_length;
 	skb_frag_t *frag = NULL;
@@ -356,7 +356,7 @@ static void edma_rx_handle_scatter_frames(struct edma_gbl_ctx *egc,
 		rxdesc_ring->head->data_len += pkt_length;
 		rxdesc_ring->head->truesize += skb->truesize;
 
-		goto process_last_scatter;
+		goto process_next_scatter;
 	}
 
 	/*
@@ -387,25 +387,24 @@ static void edma_rx_handle_scatter_frames(struct edma_gbl_ctx *egc,
 	 */
 	dev_kfree_skb_any(skb);
 
-process_last_scatter:
-
+process_next_scatter:
 	/*
 	 * If there are more segments for this packet,
 	 * then we have nothing to do. Otherwise process
 	 * last segment and send packet to stack
 	 */
-	rxdesc_ring_head = rxdesc_ring->head;
-	dev = rxdesc_ring_head->dev;
-
 	if (EDMA_RXDESC_MORE_BIT_GET(rxdesc_desc)) {
 		return;
 	}
+
+	skb_head = rxdesc_ring->head;
+	dev = skb_head->dev;
 
 	/*
 	 * Check Rx checksum offload status.
 	 */
 	if (likely(dev->features & NETIF_F_RXCSUM)) {
-		edma_rx_checksum_verify(rxdesc_desc, rxdesc_ring_head);
+		edma_rx_checksum_verify(rxdesc_desc, skb_head);
 	}
 
 	/*
@@ -416,12 +415,12 @@ process_last_scatter:
 	rx_stats = this_cpu_ptr(pcpu_stats->rx_stats);
 
 	if (unlikely(page_mode)) {
-		if (unlikely(!pskb_may_pull(rxdesc_ring_head, ETH_HLEN))) {
+		if (unlikely(!pskb_may_pull(skb_head, ETH_HLEN))) {
 			/*
 			 * Discard the SKB that we have been building,
 			 * in addition to the SKB linked to current descriptor.
 			 */
-			dev_kfree_skb_any(rxdesc_ring_head);
+			dev_kfree_skb_any(skb_head);
 			rxdesc_ring->head = NULL;
 			rxdesc_ring->last = NULL;
 			rxdesc_ring->pdesc_head = NULL;
@@ -439,12 +438,12 @@ process_last_scatter:
 	 */
 	u64_stats_update_begin(&rx_stats->syncp);
 	rx_stats->rx_pkts++;
-	rx_stats->rx_bytes += rxdesc_ring_head->len;
+	rx_stats->rx_bytes += skb_head->len;
 	rx_stats->rx_nr_frag_pkts += (uint64_t)page_mode;
 	rx_stats->rx_fraglist_pkts += (uint64_t)(!page_mode);
 	u64_stats_update_end(&rx_stats->syncp);
 
-	edma_debug("edma_gbl_ctx:%px skb:%px Jumbo pkt_length:%u\n", egc, rxdesc_ring_head, rxdesc_ring_head->len);
+	edma_debug("edma_gbl_ctx:%px skb:%px Jumbo pkt_length:%u\n", egc, skb_head, skb_head->len);
 
 	/*
 	 * See if this packet is tagged with a special service code
@@ -460,7 +459,7 @@ process_last_scatter:
 		 *    don't send it to stack otherwise continue with regular processing.
 		 */
 		struct edma_rxdesc_desc *pdesc_head = rxdesc_ring->pdesc_head;
-		if (edma_rx_handle_sc_cc_packets(egc, rxdesc_ring, pdesc_head, rxdesc_ring_head)) {
+		if (edma_rx_handle_sc_cc_packets(egc, rxdesc_ring, pdesc_head, skb_head)) {
 			rxdesc_ring->head = NULL;
 			rxdesc_ring->last = NULL;
 			rxdesc_ring->pdesc_head = NULL;
@@ -472,20 +471,22 @@ process_last_scatter:
 	 * Check if packet is meant for VP processing
 	 */
 	if (unlikely(EDMA_RXDESC_SRC_DST_INFO_GET(rxdesc_desc) & EDMA_RXDESC_SRC_DST_VP_MASK)) {
-		edma_rx_process_vp(rxdesc_ring->pdesc_head, rxdesc_ring_head);
+		edma_rx_process_vp(rxdesc_ring->pdesc_head, skb_head);
+		rxdesc_ring->head = NULL;
+		rxdesc_ring->last = NULL;
 		rxdesc_ring->pdesc_head = NULL;
 		return;
 	}
 
-	rxdesc_ring_head->protocol = eth_type_trans(rxdesc_ring_head, dev);
+	skb_head->protocol = eth_type_trans(skb_head, dev);
 
 	/*
 	 * Send packet up the stack
 	 */
 #if defined(NSS_DP_ENABLE_NAPI_GRO)
-	napi_gro_receive(&rxdesc_ring->napi, rxdesc_ring_head);
+	napi_gro_receive(&rxdesc_ring->napi, skb_head);
 #else
-	netif_receive_skb(rxdesc_ring_head);
+	netif_receive_skb(skb_head);
 #endif
 
 	rxdesc_ring->head = NULL;
