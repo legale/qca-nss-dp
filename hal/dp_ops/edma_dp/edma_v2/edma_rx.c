@@ -335,6 +335,10 @@ static void edma_rx_handle_scatter_frames(struct edma_gbl_ctx *egc,
 			rxdesc_ring->head = skb;
 			rxdesc_ring->last = NULL;
 			rxdesc_ring->pdesc_head = rxdesc_desc;
+			/*
+			 * TODO: It is safer to save the descriptor value here instead of the pointer,
+			 * since descriptor may be overwritten by HW after function returns.
+			 */
 			return;
 		}
 
@@ -431,6 +435,29 @@ process_next_scatter:
 
 			return;
 		}
+	}
+
+	/*
+	 * In some cases like PPE tunnel when mode 1 is enabled
+	 * the skb data will be pointing to outer header and if
+	 * packet decap is successful then data offset will point
+	 * to inner payload.
+	 */
+	if (unlikely(!__pskb_pull(skb_head, EDMA_RXDESC_DATA_OFFSET_GET(rxdesc_ring->pdesc_head)))) {
+		/*
+		 * Discard the SKB that we have been building,
+		 * in addition to the SKB linked to current descriptor.
+		 */
+		dev_kfree_skb_any(skb_head);
+		rxdesc_ring->head = NULL;
+		rxdesc_ring->last = NULL;
+		rxdesc_ring->pdesc_head = NULL;
+
+		u64_stats_update_begin(&rx_stats->syncp);
+		rx_stats->rx_nr_frag_headroom_err++;
+		u64_stats_update_end(&rx_stats->syncp);
+
+		return;
 	}
 
 	/*
@@ -553,6 +580,15 @@ static inline bool edma_rx_handle_linear_packets(struct edma_gbl_ctx *egc,
 	}
 
 send_to_stack:
+
+	/*
+	 * In some cases like PPE tunnel when mode 1 is enabled
+	 * the skb data will be pointing to outer header and if
+	 * packet decap is successful then data offset will point
+	 * to inner payload.
+	 */
+	__skb_pull(skb, EDMA_RXDESC_DATA_OFFSET_GET(rxdesc_desc));
+
 	/*
 	 * Check Rx checksum offload status.
 	 */
