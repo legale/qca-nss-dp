@@ -27,6 +27,16 @@
 #include <fal/fal_port_ctrl.h>
 
 /*
+ * The max MTU value is maximum frame size excluding
+ * Ethernet header size (14B), FCS (4B) and 2x VLANs (8B).
+ *
+ * SSDK API internally takes care of adding size of
+ * 2xVLANs (8B) when configuring the MTU value.
+ * So, the max MTU value does not consider 2xVLANs.
+ */
+#define QCOM_HAL_MAX_MTU_SIZE		12262
+
+/*
  * Subclass for base nss_gmac_haldev
  */
 struct qcom_hal_dev {
