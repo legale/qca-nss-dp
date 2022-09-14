@@ -27,6 +27,7 @@
 #include <fal/fal_rss_hash.h>
 #include <fal/fal_servcode.h>
 #include <ppe_drv_sc.h>
+#include <ppe_drv.h>
 #include <linux/clk.h>
 #include "edma.h"
 #include "edma_cfg_tx.h"
@@ -959,8 +960,9 @@ static struct ctl_table edma_root[] = {
  */
 int edma_init(void)
 {
-	int ret = 0;
+	int ret = 0, i;
 	struct resource res_edma;
+	uint8_t queue_start = 0;
 
 	/*
 	 * Check the EDMA state
@@ -1052,6 +1054,16 @@ int edma_init(void)
 	 * We add NAPIs and register IRQs at the time of the first netdev open
 	 */
 	edma_gbl_ctx.napi_added = false;
+
+	/*
+	 * DP module maintains queue to ring mapping, and the rings are mapped
+	 * to specific host cores. Similar mapping is needed in ppe driver to
+	 * redirect packets/flows to specific host cores.
+	 */
+	for (i = 0; i < NR_CPUS; i++) {
+		queue_start = EDMA_PORT_QUEUE_START + (i * EDMA_PORT_QUEUE_PER_CORE);
+		ppe_drv_core2queue_mapping(i, queue_start);
+	}
 
 	return 0;
 
