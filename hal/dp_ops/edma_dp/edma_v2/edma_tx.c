@@ -40,6 +40,7 @@ uint32_t edma_tx_complete(uint32_t work_to_do, struct edma_txcmpl_ring *txcmpl_r
 	uint32_t cons_idx;
 	uint32_t data;
 	struct sk_buff *skb;
+	struct sk_buff_head h;
 	uint32_t txcmpl_errors;
 	uint32_t avail, count;
 	uint32_t end_idx;
@@ -86,6 +87,8 @@ uint32_t edma_tx_complete(uint32_t work_to_do, struct edma_txcmpl_ring *txcmpl_r
 
 	dsb(st);
 
+	skb_queue_head_init(&h);
+
 	/*
 	 * TODO:
 	 * Instead of freeing the skb, it might be better to save and use
@@ -130,11 +133,23 @@ uint32_t edma_tx_complete(uint32_t work_to_do, struct edma_txcmpl_ring *txcmpl_r
 				u64_stats_update_end(&txcmpl_stats->syncp);
 			}
 
-			dev_kfree_skb_any(skb);
+			/*
+			 * Fast-recycle the SKB with a list, if skb is originally allocated
+			 * from recycler and has been fast trasmitted
+			 */
+			if (likely(skb->fast_xmit) && likely(skb->is_from_recycler)) {
+				__skb_queue_head(&h, skb);
+			} else {
+				dev_kfree_skb(skb);
+			}
 		}
 
 		cons_idx = ((cons_idx + 1) & EDMA_TX_RING_SIZE_MASK);
 		txcmpl = EDMA_TXCMPL_DESC(txcmpl_ring, cons_idx);
+	}
+
+	if (likely(!skb_queue_empty(&h))) {
+		dev_kfree_skb_list_fast(&h);
 	}
 
 	txcmpl_ring->cons_idx = cons_idx;
