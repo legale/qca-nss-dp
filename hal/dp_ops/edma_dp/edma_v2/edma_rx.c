@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -278,8 +278,10 @@ static inline bool edma_rx_handle_sc_cc_packets(struct edma_gbl_ctx *egc,
 		struct sk_buff *skb)
 {
 	uint16_t desc_index, next_desc_index;
+	uint32_t dst_port;
 	uint8_t cpu_code, service_code;
 	struct edma_rxdesc_sec_desc *rxdesc_sec, *next_rxdesc_sec;
+	struct ppe_drv_sc_metadata sc_info = {0};
 
 	/*
 	 * The primary descriptor has CPU code valid indication bit while
@@ -288,6 +290,10 @@ static inline bool edma_rx_handle_sc_cc_packets(struct edma_gbl_ctx *egc,
 	if (likely(EDMA_RXDESC_CPU_CODE_VALID_GET(rxdesc_head))) {
 		desc_index = ((uint8_t *)rxdesc_head - (uint8_t *)rxdesc_ring->pdesc) >> EDMA_RXDESC_SIZE_SHIFT;
 		rxdesc_sec = EDMA_RXDESC_SEC_DESC(rxdesc_ring, desc_index);
+
+		/*
+		 * TODO: Invalidate the secondary descriptor before use.
+		 */
 		cpu_code = EDMA_RXDESC_CPU_CODE_GET(rxdesc_sec);
 
 		/*
@@ -311,11 +317,19 @@ static inline bool edma_rx_handle_sc_cc_packets(struct edma_gbl_ctx *egc,
 	if (likely(service_code)) {
 
 		/*
-		 * Update stats for the SAWF service code.
+		 * Fill the service code metadata structure.
 		 */
-		edma_rx_sc_stats_update(skb, &egc->sc_stats[service_code]);
+		sc_info.service_code = service_code;
+		dst_port = EDMA_RXDESC_DST_INFO_GET(rxdesc_head);
+		if (likely(((dst_port & ~EDMA_RXDESC_DST_PORT_ID_MASK) == EDMA_RXDESC_DST_PORT) &&
+				(EDMA_RXDESC_PORT_ID_GET(dst_port) & EDMA_RXDESC_VP_PORT_MASK))) {
+			sc_info.vp_num = EDMA_RXDESC_DST_PORT_ID_GET(rxdesc_head);
+		}
 
-		if (ppe_drv_sc_process_skbuff(service_code, skb)) {
+		/*
+		 * Serivce codes can return true / false based on the callbacks registered to them.
+		 */
+		if (unlikely(ppe_drv_sc_process_skbuff(&sc_info, skb))) {
 			return true;
 		}
 	}
@@ -1001,7 +1015,7 @@ irqreturn_t edma_rx_handle_irq(int irq, void *ctx)
  * edma_rx_phy_tstamp_buf()
  *	Receive skb for PHY timestamping
  */
-bool edma_rx_phy_tstamp_buf(__attribute__((unused))void *app_data, struct sk_buff *skb)
+bool edma_rx_phy_tstamp_buf(__attribute__((unused))void *app_data, struct sk_buff *skb, __attribute__((unused))void *sc_data)
 {
 	struct net_device *ndev = skb->dev;
 
