@@ -31,6 +31,10 @@
 
 #define NSS_DP_ACL_DEV_ID 0
 
+#if defined(NSS_DP_MAC_POLL_SUPPORT)
+#define NSS_DP_EDMA_SWITCH_DEV_ID	0
+#endif
+
 /*
  * Number of TX/RX queue supported
  */
@@ -157,6 +161,9 @@ struct nss_dp_global_ctx {
 	bool overwrite_mode;		/* Overwrite mode for Rx processing */
 	bool page_mode;			/* Page mode for Rx processing */
 	bool tx_requeue_stop;		/* Disable queue stop for Tx processing */
+#if defined(NSS_DP_MAC_POLL_SUPPORT)
+	bool enable_polling_task;	/* enable SSDK PHY polling task */
+#endif
 };
 
 /* Global data */

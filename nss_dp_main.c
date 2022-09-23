@@ -31,6 +31,9 @@
 #include <ref/ref_vsi.h>
 #endif
 #include <net/switchdev.h>
+#if defined(NSS_DP_MAC_POLL_SUPPORT)
+#include <init/ssdk_init.h>
+#endif
 
 #include "nss_dp_hal.h"
 
@@ -351,6 +354,16 @@ static int nss_dp_open(struct net_device *netdev)
 
 		dp_priv->drv_flags |= NSS_DP_PRIV_FLAG(INIT_DONE);
 	}
+
+#if defined(NSS_DP_MAC_POLL_SUPPORT)
+	/*
+	 * Enable SSDK PHY polling task to enable GMACs.
+	 */
+	if (!dp_global_ctx.enable_polling_task) {
+		ssdk_mac_sw_sync_work_start(NSS_DP_EDMA_SWITCH_DEV_ID);
+		dp_global_ctx.enable_polling_task = true;
+	}
+#endif
 
 	/*
 	 * Inform the Linux Networking stack about the hardware capability of
@@ -986,6 +999,10 @@ int __init nss_dp_init(void)
 	int ret;
 
 	dp_global_ctx.common_init_done = false;
+
+#if defined(NSS_DP_MAC_POLL_SUPPORT)
+	dp_global_ctx.enable_polling_task = false;
+#endif
 
 	/*
 	 * Get the buffer size to allocate

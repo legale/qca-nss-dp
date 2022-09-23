@@ -197,6 +197,11 @@ static void edma_cfg_rx_desc_ring_cleanup(struct edma_gbl_ctx *egc,
 	}
 
 	/*
+	 * Update the consumer index to keep hardware upto date with latest state.
+	 */
+	edma_reg_write(EDMA_REG_RXDESC_CONS_IDX(rxdesc_ring->ring_id), cons_idx);
+
+	/*
 	 * Free RXDESC ring descriptors
 	 */
 	kfree(rxdesc_ring->pdesc);
