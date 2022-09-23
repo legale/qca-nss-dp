@@ -59,6 +59,7 @@ static const struct qcom_ethtool_stats qcom_gstrings_stats[] = {
 	{"tx_fraglist_packets", QCOM_STAT(tx_fraglist_packets)},
 	{"tx_fraglist_nr_frags_packets", QCOM_STAT(tx_fraglist_with_nr_frags_packets)},
 	{"tx_tso_packets", QCOM_STAT(tx_tso_packets)},
+	{"tx_tso_drop_packets", QCOM_STAT(tx_tso_drop_packets)},
 #endif
 };
 

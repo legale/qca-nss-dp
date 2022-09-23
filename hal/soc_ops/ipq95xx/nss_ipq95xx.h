@@ -26,6 +26,11 @@
 #define NSS_DP_HAL_START_IFNUM		1
 
 /*
+ * Maximum supported GSO segments
+ */
+#define NSS_DP_HAL_GSO_MAX_SEGS		32
+
+/*
  * Number of TX/RX queue supported
  */
 #define NSS_DP_QUEUE_NUM		4
@@ -113,6 +118,7 @@ struct nss_dp_hal_gmac_stats {
 	uint64_t tx_fraglist_packets;	/**< Number of TX fraglist packets */
 	uint64_t tx_fraglist_with_nr_frags_packets;	/**< Number of TX fraglist packets with nr fragments */
 	uint64_t tx_tso_packets;	/**< Number of TX TCP segmentation offload packets */
+	uint64_t tx_tso_drop_packets;	/**< Number of TX TCP segmentation dropped packets */
 };
 
 extern int edma_init(void);

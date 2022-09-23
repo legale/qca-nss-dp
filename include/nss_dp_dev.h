@@ -45,6 +45,11 @@
 #define NSS_DP_NETDEV_RX_QUEUE_NUM	NSS_DP_QUEUE_NUM
 
 /*
+ * Maximum supported GSO segments
+ */
+#define NSS_DP_GSO_MAX_SEGS		NSS_DP_HAL_GSO_MAX_SEGS
+
+/*
  * Rx buffer allocation size as per memory profile
  */
 #if (defined(NSS_DP_MEM_PROFILE_LOW) || defined(NSS_DP_MEM_PROFILE_MEDIUM)) && !defined(__LP64__)

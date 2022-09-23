@@ -142,6 +142,7 @@ struct edma_tx_stats {
 	uint64_t tx_fraglist_pkts;
 	uint64_t tx_fraglist_with_nr_frags_pkts;
 	uint64_t tx_tso_pkts;
+	uint64_t tx_tso_drop_pkts;
 	struct u64_stats_sync syncp;
 };
 

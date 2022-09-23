@@ -649,17 +649,21 @@ enum edma_tx edma_tx_ring_xmit(struct net_device *netdev, struct nss_dp_vp_tx_in
 		}
 	} else {
 		/*
-		 * HW does not support TSO for packets with more than or equal to
-		 * 32 segments. HW hangs up if it sees more than 32 segments.
-		 * To be on safer side, drop the packets with such conditions.
-		 * TODO: Perform SW TSO for such packets.
+		 * HW does not support TSO for packets with more than 32 segments.
+		 * HW hangs up if it sees more than 32 segments.
+		 * Kernel Perform GSO for such packets with netdev gso_max_segs set to 32.
 		 */
-		if (unlikely(skb_shinfo(skb)->gso_segs >= EDMA_TX_TSO_SEG_MAX)) {
+		if (unlikely(skb_shinfo(skb)->gso_segs > EDMA_TX_TSO_SEG_MAX)) {
 			edma_debug("Number of segments %u more than %u for %d ring\n",
 					skb_shinfo(skb)->gso_segs, EDMA_TX_TSO_SEG_MAX, txdesc_ring->id);
 			u64_stats_update_begin(&txdesc_stats->syncp);
 			++txdesc_stats->tso_max_seg_exceed;
 			u64_stats_update_end(&txdesc_stats->syncp);
+
+			u64_stats_update_begin(&stats->syncp);
+			stats->tx_tso_drop_pkts++;
+			u64_stats_update_end(&stats->syncp);
+
 			return EDMA_TX_FAIL;
 		}
 

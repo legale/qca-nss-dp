@@ -780,6 +780,7 @@ static int32_t nss_dp_probe(struct platform_device *pdev)
 	dp_priv->netdev = netdev;
 	netdev->watchdog_timeo = 5 * HZ;
 	netdev->netdev_ops = &nss_dp_netdev_ops;
+	netdev->gso_max_segs = NSS_DP_GSO_MAX_SEGS;
 	nss_dp_set_ethtool_ops(netdev);
 #ifdef CONFIG_NET_SWITCHDEV
 	nss_dp_switchdev_setup(netdev);

@@ -24,6 +24,11 @@
 #define NSS_DP_HAL_START_IFNUM			0
 
 /*
+ * Maximum supported GSO segments
+ */
+#define NSS_DP_HAL_GSO_MAX_SEGS			GSO_MAX_SEGS
+
+/*
  * Number of TX/RX queue supported
  */
 #define NSS_DP_QUEUE_NUM			1

@@ -56,6 +56,7 @@ static const struct syn_ethtool_stats syn_gstrings_stats[] = {
 	{"tx_fraglist_packets", SYN_STAT(tx_fraglist_packets)},
 	{"tx_fraglist_nr_frags_packets", SYN_STAT(tx_fraglist_with_nr_frags_packets)},
 	{"tx_tso_packets", SYN_STAT(tx_tso_packets)},
+	{"tx_tso_drop_packets", SYN_STAT(tx_tso_drop_packets)},
 #endif
 };
 
