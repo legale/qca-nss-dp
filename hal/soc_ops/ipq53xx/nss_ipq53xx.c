@@ -230,10 +230,7 @@ bool nss_dp_hal_init(void)
 	/*
 	 * Bail out on not supported platform
 	 */
-	/*
-	 * TODO: Update SoC name during SOD
-	 */
-	if (!of_machine_is_compatible("qcom,devsoc")) {
+	if (!of_machine_is_compatible("qcom,ipq5332")) {
 		return false;
 	}
 
