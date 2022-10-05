@@ -171,17 +171,18 @@ static int32_t syn_get_max_frame_size(struct nss_gmac_hal_dev *nghd)
  * syn_set_max_frame_size()
  */
 static int32_t syn_set_max_frame_size(struct nss_gmac_hal_dev *nghd,
-					uint32_t val)
+					uint32_t maxframe)
 {
 	/*
-	 * TODO: In override mode, the NPU configures
-	 * the max frame size into HW, so we do not
-	 * need to do configure the HW here. When we
-	 * need to support changing max frame size for
-	 * host mode DMA driver for IPQ807x/IPQ60xx,
-	 * we would need to call fal_port_max_frame_size_set()
-	 * here by differentiating between override mode and host mode.
+	 * Check for maximum allowable MTU.
 	 */
+	BUG_ON(nghd == NULL);
+
+	if (maxframe > SYN_HAL_MAX_MTU_SIZE) {
+		netdev_warn(nghd->netdev, "Maximum allowed MTU: %d\n", SYN_HAL_MAX_MTU_SIZE);
+		return -1;
+	}
+
 	return 0;
 }
 
