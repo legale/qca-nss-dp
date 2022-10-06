@@ -179,11 +179,18 @@ static inline int edma_rx_alloc_buffer_list(struct edma_rxfill_ring *rxfill_ring
 
 		/*
 		 * Invalidate skb->data
+		 * A73 flush operation does an invalidate operation as well.
+		 * If the packet is fast transmitted and hence fast recycled,
+		 * we can be assured that invalidate was already done at the
+		 * time of previous transmit
 		 */
-		dmac_inv_range_no_dsb((void *)skb->data,
-				(void *)(skb->data + rx_alloc_size -
-					EDMA_RX_SKB_HEADROOM -
-					NET_IP_ALIGN));
+		if (unlikely(!skb->fast_recycled)) {
+			dmac_inv_range_no_dsb((void *)skb->data,
+					      (void *)(skb->data + rx_alloc_size -
+					      EDMA_RX_SKB_HEADROOM -
+					      NET_IP_ALIGN));
+		}
+		skb->fast_recycled = 0;
 		prod_idx = (prod_idx + 1) & EDMA_RX_RING_SIZE_MASK;
 		num_alloc++;
 	}
