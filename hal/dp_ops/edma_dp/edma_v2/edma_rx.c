@@ -855,7 +855,12 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 			 */
 			if (likely(!EDMA_RXDESC_MORE_BIT_GET(rxdesc_desc))) {
 				if (likely(edma_rx_handle_linear_packets(egc, rxdesc_ring, rxdesc_desc, skb))) {
-					list_add_tail(&skb->list, &rx_list);
+					if (unlikely(ndev->features & NETIF_F_GRO)) {
+						skb->protocol = eth_type_trans(skb, ndev);
+						napi_gro_receive(&rxdesc_ring->napi, skb);
+					} else {
+						list_add_tail(&skb->list, &rx_list);
+					}
 				}
 				goto next_rx_desc;
 			}
