@@ -40,6 +40,11 @@ uint32_t edma_cfg_rx_rps_num_cores = NR_CPUS;
 #define EDMA_QUEUE_OFFSET(q_id)	(q_id / EDMA_MAX_PRI_PER_CORE)
 
 /*
+ * Rx EDMA maximum queue supported
+ */
+#define EDMA_CPU_PORT_QUEUE_MAX(queue_start)	queue_start + (EDMA_MAX_PRI_PER_CORE * NR_CPUS) - 1
+
+/*
  * edma_cfg_rx_fill_ring_cleanup()
  *	Cleanup resources for one RxFill ring
  *
@@ -788,8 +793,8 @@ static void edma_cfg_rx_qid_to_rx_desc_ring_mapping(struct edma_gbl_ctx *egc)
 	/*
 	 * Here map all the queues to ring.
 	 */
-	for (q_id = EDMA_CPU_PORT_QUEUE_START;
-		q_id <= EDMA_CPU_PORT_QUEUE_MAX;
+	for (q_id = egc->rx_queue_start;
+		q_id <= EDMA_CPU_PORT_QUEUE_MAX(egc->rx_queue_start);
 			q_id += EDMA_QID2RID_NUM_PER_REG) {
 		reg_index = q_id/EDMA_QID2RID_NUM_PER_REG;
 		ring_index = desc_index + EDMA_QUEUE_OFFSET(q_id);
@@ -955,7 +960,7 @@ void edma_cfg_rx_mapping(struct edma_gbl_ctx *egc)
  */
 void edma_cfg_rx_point_offload_mapping(struct edma_gbl_ctx *egc)
 {
-	uint32_t queue_id = EDMA_CPU_PORT_QUEUE_START;
+	uint32_t queue_id = egc->rx_queue_start;
 	uint32_t word_idx, bit_idx;
 
 	/*
@@ -1036,7 +1041,7 @@ static int edma_cfg_rx_rings_setup(struct edma_gbl_ctx *egc)
 	 * Allocate RxDesc ring descriptors
 	 */
 	for (ring_idx = 0; ring_idx < egc->num_rxdesc_rings; ring_idx++) {
-		uint32_t index, word_idx, queue_id = EDMA_CPU_PORT_QUEUE_START;
+		uint32_t index, word_idx, queue_id = egc->rx_queue_start;
 		int32_t ret;
 		struct edma_rxdesc_ring *rxdesc_ring = NULL;
 
@@ -1044,7 +1049,7 @@ static int edma_cfg_rx_rings_setup(struct edma_gbl_ctx *egc)
 		rxdesc_ring->count = EDMA_RX_RING_SIZE;
 		rxdesc_ring->ring_id = egc->rxdesc_ring_start + ring_idx;
 
-		if (queue_id > EDMA_CPU_PORT_QUEUE_MAX) {
+		if (queue_id > EDMA_CPU_PORT_QUEUE_MAX(egc->rx_queue_start)) {
 			edma_err("Invalid queue_id: %d\n", queue_id);
 			while (--ring_idx >= 0) {
 				edma_cfg_rx_desc_ring_cleanup(egc, &egc->rxdesc_rings[ring_idx]);

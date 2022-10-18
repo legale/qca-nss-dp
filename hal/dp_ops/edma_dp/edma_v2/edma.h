@@ -96,7 +96,7 @@ enum edma_port_ucast_queues {
 
 /*
  * edma_cpu_port_mcast_queues
- * 	EDMA multicast queue number
+ *	EDMA multicast queue number
  */
 enum edma_cpu_port_mcast_queues {
 	EDMA_CPU_PORT_MCAST_QUEUE_START = 256,
@@ -313,6 +313,8 @@ struct edma_gbl_ctx {
 	struct edma_ppeds_drv ppeds_drv;
 			/* PPE-DS nodes information */
 #endif
+	uint8_t rx_queue_start;
+			/* Rx queue start */
 };
 
 extern struct edma_gbl_ctx edma_gbl_ctx;

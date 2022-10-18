@@ -629,6 +629,19 @@ static int edma_of_get_pdata(struct resource *edma_res)
 	}
 
 	/*
+	 * Get Rx queue start
+	 */
+	ret = of_property_read_u8(edma_gbl_ctx.device_node,
+			"qcom,rx-queue-start",
+			&edma_gbl_ctx.rx_queue_start);
+	if (ret) {
+		edma_err("Unable to read Rx queue start.\n");
+		return -EINVAL;
+	}
+	edma_debug("rx queue start: %d\n",
+			edma_gbl_ctx.rx_queue_start);
+
+	/*
 	 * Get rx_ring to queue mapping
 	 */
 	ret = of_property_read_u32_array(edma_gbl_ctx.device_node,
@@ -803,7 +816,7 @@ static void edma_init_ring_maps(void)
 }
 
 /*
- * edma_cfg_ucast_priority_map_tbl()
+ * edma_configure_ucast_prio_map_tbl()
  *	Configure unicast priority map table
  *
  * Map int_priority values to priority class and initialize
@@ -854,7 +867,7 @@ static sw_error_t edma_configure_ucast_prio_map_tbl(void)
 void edma_configure_rps_hash_map(struct edma_gbl_ctx *egc)
 {
 	uint32_t hash = 0;
-	uint32_t q_off = EDMA_CPU_PORT_QUEUE_START;
+	uint32_t q_off = egc->rx_queue_start;
 
 	/*
 	 * Initialize the store
@@ -1197,7 +1210,7 @@ int edma_init(void)
 	 * redirect packets/flows to specific host cores.
 	 */
 	for (i = 0; i < NR_CPUS; i++) {
-		queue_start = edma_gbl_ctx.rx_ring_queue_map[EDMA_CPU_PORT_QUEUE_START][i];
+		queue_start = edma_gbl_ctx.rx_ring_queue_map[edma_gbl_ctx.rx_queue_start][i];
 		ppe_drv_core2queue_mapping(i, queue_start);
 	}
 
