@@ -108,9 +108,6 @@ static inline int edma_rx_alloc_buffer_list(struct edma_rxfill_ring *rxfill_ring
 		skb_alloc = dev_alloc_skb(rx_alloc_size);
 		if (likely(skb_alloc)) {
 			list_add_tail(&skb_alloc->list, &rx_skb_alloc);
-			prefetch(skb_alloc);
-			prefetch((uint8_t *)skb_alloc + 64);
-			prefetch((uint8_t *)skb_alloc + 128);
 			num_alloc++;
 		} else {
 			u64_stats_update_begin(&rxfill_stats->syncp);
@@ -625,7 +622,6 @@ send_to_stack:
 
 	edma_debug("edma_gbl_ctx:%px, skb:%px pkt_length:%u\n",
 			egc, skb, skb->len);
-
 	/*
 	 * See if this packet is tagged with a special service code
 	 * or CPU code.
@@ -749,7 +745,7 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 	uint32_t work_to_do, work_done = 0;
 	uint16_t prod_idx, cons_idx, end_idx;
 	uint16_t cons_idx_1, cons_idx_2;
-	struct sk_buff *cur_skb = NULL, *skb_prev = NULL;
+	struct sk_buff *cur_skb = NULL;
 	struct list_head rx_list;
 	INIT_LIST_HEAD(&rx_list);
 
@@ -837,7 +833,9 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 				struct sk_buff *pf_skb;
 				pf_skb = (struct sk_buff *)EDMA_RXDESC_OPAQUE_GET(pf_desc);
 				prefetch(pf_skb);
+				prefetch((uint8_t *)pf_skb + 64);
 				prefetch((uint8_t *)pf_skb + 128);
+				prefetch((uint8_t *)pf_skb + 192);
 				cons_idx_2 = (cons_idx_2 + 1) & EDMA_RX_RING_SIZE_MASK;
 
 				pf_desc = EDMA_RXDESC_PRI_DESC(rxdesc_ring, cons_idx_2);
@@ -860,6 +858,7 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 						napi_gro_receive(&rxdesc_ring->napi, skb);
 					} else {
 						list_add_tail(&skb->list, &rx_list);
+
 					}
 				}
 				goto next_rx_desc;
@@ -893,28 +892,26 @@ next_rx_desc:
 
 	cur_skb =  list_first_entry(&rx_list, struct sk_buff, list);
 	if (likely(cur_skb)) {
+		struct sk_buff *next_skb = NULL;
+
 		/*
 		 * Prefetch the packet data for the next skbuff, and the skbuff
 		 * structure for next and next-next skbuffs for optimal performance.
 		 */
-		list_for_each_entry_safe_reverse(cur_skb, skb_prev, &rx_list, list) {
-			if (likely(skb_prev)) {
-				if (likely(!list_is_first((struct list_head *)skb_prev, &rx_list))) {
-					prefetch(skb_prev->prev);
-					prefetch((uint8_t *)(skb_prev->prev) + 64);
-					prefetch((uint8_t *)(skb_prev->prev) + 128);
-					prefetch((uint8_t *)(skb_prev->prev) + 192);
-				}
-				prefetch(skb_prev->data);
-				prefetch(skb_shinfo(skb_prev));
+		list_for_each_entry_safe(cur_skb, next_skb, &rx_list, list) {
+			if (likely(next_skb)) {
+				prefetch(next_skb);
+				prefetch((uint8_t *)(next_skb) + 64);
+				prefetch((uint8_t *)(next_skb) + 128);
+				prefetch((uint8_t *)(next_skb) + 192);
+				prefetch(next_skb->data);
+				prefetch(skb_shinfo(next_skb));
 			}
-			cur_skb->protocol = eth_type_trans(cur_skb, cur_skb->dev);
-		}
 
-		/*
-		 * Send packets upto the network stack
-		 */
-		netif_receive_skb_list(&rx_list);
+			skb_list_del_init(cur_skb);
+			cur_skb->protocol = eth_type_trans(cur_skb, cur_skb->dev);
+			netif_receive_skb(cur_skb);
+		}
 	}
 
 	return work_done;
