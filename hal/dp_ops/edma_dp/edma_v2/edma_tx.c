@@ -637,6 +637,7 @@ enum edma_tx edma_tx_ring_xmit(struct net_device *netdev, struct nss_dp_vp_tx_in
 		txdesc = edma_tx_skb_first_desc(dp_dev, txdesc_ring, dptxi, skb, &hw_next_to_use, stats);
 		EDMA_TXDESC_ENDIAN_SET(txdesc);
 		num_desc_filled++;
+		skb->fast_recycled = 1;
 	} else {
 		/*
 		 * HW does not support TSO for packets with more than or equal to
