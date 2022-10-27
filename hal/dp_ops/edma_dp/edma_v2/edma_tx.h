@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -32,7 +32,12 @@
 						/* Includes the one additional for VP */
 #define EDMA_TX_MAX_PRIORITY_LEVEL	1
 
+#if defined(NSS_DP_MEM_PROFILE_LOW) || defined(NSS_DP_MEM_PROFILE_MEDIUM)
+#define EDMA_TX_RING_SIZE		1024
+#else
 #define EDMA_TX_RING_SIZE		2048
+#endif
+
 #define EDMA_TX_RING_SIZE_MASK		(EDMA_TX_RING_SIZE - 1)
 
 #define EDMA_TX_TSO_SEG_MAX		32	/* Max segment processing capacity of HW for TSO */
