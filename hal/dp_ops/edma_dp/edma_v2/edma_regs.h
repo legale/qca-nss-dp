@@ -332,6 +332,11 @@
 #define EDMA_RXFILL_RING_EN			0x1
 
 /*
+ * EDMA_REG_RXFILL_RING_DISABLE register
+ */
+#define EDMA_RXFILL_RING_DISABLE		0x1
+
+/*
  * EDMA_REG_RXFILL_INT_MASK register
  */
 #define EDMA_RXFILL_INT_MASK			0x1
@@ -375,6 +380,7 @@
 #define EDMA_RXDESC_CTAG_REMOVE_EN		0x4
 #define EDMA_RXDESC_QDISC_EN			0x2
 #define EDMA_RXDESC_RX_EN			0x1
+#define EDMA_RXDESC_RX_DISABLE			0x1
 
 /*
  * EDMA_REG_TX_INT_MASK register

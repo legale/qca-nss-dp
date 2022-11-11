@@ -947,11 +947,26 @@ int edma_ppeds_inst_start(nss_dp_ppeds_handle_t *ppeds_handle, uint8_t intr_enab
 	edma_reg_write(EDMA_REG_RXDESC_CTRL(ppeds_node->rx_ring.ring_id), data);
 
 	/*
+	 * Reset RxDesc disable Reg.
+	 */
+	data = edma_reg_read(EDMA_REG_RXDESC_DISABLE(ppeds_node->rx_ring.ring_id));
+	data &= ~EDMA_RXDESC_RX_DISABLE;
+	edma_reg_write(EDMA_REG_RXDESC_DISABLE(ppeds_node->rx_ring.ring_id), data);
+
+	/*
 	 * Enable RxFill Ring.
 	 */
 	data = edma_reg_read(EDMA_REG_RXFILL_RING_EN(ppeds_node->rxfill_ring.ring_id));
 	data |= EDMA_RXFILL_RING_EN;
 	edma_reg_write(EDMA_REG_RXFILL_RING_EN(ppeds_node->rxfill_ring.ring_id), data);
+
+	/*
+	 * Reset RxFill disable Reg.
+	 */
+	data = edma_reg_read(EDMA_REG_RXFILL_DISABLE(ppeds_node->rxfill_ring.ring_id));
+	data &= ~EDMA_RXFILL_RING_DISABLE;
+	edma_reg_write(EDMA_REG_RXFILL_DISABLE(ppeds_node->rxfill_ring.ring_id), data);
+
 
 	/*
 	 * Enable Tx Ring.
@@ -989,16 +1004,38 @@ void edma_ppeds_inst_stop(nss_dp_ppeds_handle_t *ppeds_handle, uint8_t intr_enab
 	write_unlock_bh(&drv->lock);
 
 	/*
-	 * Disable Rx, TxComp and RxFill rings.
+	 * Clear enable bit, set disable bit and wait untill Rx Desc ring is disabled.
 	 */
 	data = edma_reg_read(EDMA_REG_RXDESC_CTRL(ppeds_node->rx_ring.ring_id));
 	data &= ~EDMA_RXDESC_RX_EN;
 	edma_reg_write(EDMA_REG_RXDESC_CTRL(ppeds_node->rx_ring.ring_id), data);
 
+	data = edma_reg_read(EDMA_REG_RXDESC_DISABLE(ppeds_node->rx_ring.ring_id));
+	data |= EDMA_RXDESC_RX_DISABLE;
+	edma_reg_write(EDMA_REG_RXDESC_DISABLE(ppeds_node->rx_ring.ring_id), data);
+
+	do {
+		data = edma_reg_read(EDMA_REG_RXDESC_DISABLE_DONE(ppeds_node->rx_ring.ring_id));
+	} while (!data);
+
+	/*
+	 * Clear enable bit, set the disable bit and wait until the RxFill ring is disabled.
+	 */
 	data = edma_reg_read(EDMA_REG_RXFILL_RING_EN(ppeds_node->rxfill_ring.ring_id));
 	data &= ~EDMA_RXFILL_RING_EN;
 	edma_reg_write(EDMA_REG_RXFILL_RING_EN(ppeds_node->rxfill_ring.ring_id), data);
 
+	data = edma_reg_read(EDMA_REG_RXFILL_DISABLE(ppeds_node->rxfill_ring.ring_id));
+	data |= EDMA_RXFILL_RING_DISABLE;
+	edma_reg_write(EDMA_REG_RXFILL_DISABLE(ppeds_node->rxfill_ring.ring_id), data);
+
+	do {
+		data = edma_reg_read(EDMA_REG_RXFILL_DISABLE_DONE(ppeds_node->rxfill_ring.ring_id));
+	} while (!data);
+
+	/*
+	 * Disable TxDesc rings.
+	 */
 	data = edma_reg_read(EDMA_REG_TXDESC_CTRL(ppeds_node->tx_ring.id));
 	data &= ~EDMA_TXDESC_TX_ENABLE;
 	edma_reg_write(EDMA_REG_TXDESC_CTRL(ppeds_node->tx_ring.id), data);
