@@ -45,5 +45,6 @@ static inline void nss_dp_hal_set_gmac_ops(struct nss_gmac_hal_ops *hal_ops, uin
 extern struct nss_dp_data_plane_ops *nss_dp_hal_get_data_plane_ops(void);
 extern bool nss_dp_hal_init(void);
 extern void nss_dp_hal_cleanup(void);
+extern struct nss_dp_ppeds_ops* nss_dp_ppeds_ops_get(void);
 
 #endif	/* __NSS_DP_HAL_H__ */

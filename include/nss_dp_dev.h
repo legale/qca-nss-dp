@@ -28,6 +28,9 @@
 #include "nss_dp_api_if.h"
 #include "nss_dp_hal_if.h"
 #include "nss_dp_hal_info.h"
+#ifdef NSS_DP_PPEDS_SUPPORT
+#include "nss_dp_ppeds.h"
+#endif
 
 #define NSS_DP_ACL_DEV_ID 0
 

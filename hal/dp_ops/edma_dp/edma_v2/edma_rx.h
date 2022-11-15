@@ -225,6 +225,9 @@ struct edma_rxfill_desc {
  * RxFill ring
  */
 struct edma_rxfill_ring {
+#ifdef NSS_DP_PPEDS_SUPPORT
+	struct napi_struct napi;	/* Napi structure */
+#endif
 	uint32_t ring_id;		/* RXFILL ring number */
 	uint32_t count;			/* number of descriptors in the ring */
 	uint32_t prod_idx;		/* Ring producer index */
@@ -264,6 +267,9 @@ struct edma_rxdesc_ring {
 };
 
 irqreturn_t edma_rx_handle_irq(int irq, void *ctx);
+#ifdef NSS_DP_PPEDS_SUPPORT
+irqreturn_t edma_rxfill_handle_irq(int irq, void *ctx);
+#endif
 int edma_rx_alloc_buffer(struct edma_rxfill_ring *rxfill_ring, int alloc_count);
 int edma_rx_napi_poll(struct napi_struct *napi, int budget);
 bool edma_rx_phy_tstamp_buf(__attribute__((unused))void *app_data, struct sk_buff *skb);
