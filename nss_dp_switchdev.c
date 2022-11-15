@@ -2,6 +2,8 @@
  **************************************************************************
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
  *
+ * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved
+ *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all copies.
@@ -20,6 +22,9 @@
 #include <linux/if_vlan.h>
 #include <linux/version.h>
 #include <net/switchdev.h>
+#ifdef NSS_DP_SW_BR_OPS
+#include <ppe_drv_public.h>
+#endif /* NSS_DP_SW_BR_OPS */
 
 #include "nss_dp_dev.h"
 #include "fal/fal_stp.h"
@@ -29,9 +34,14 @@
 #define NSS_DP_SW_ETHTYPE_PID		0 /* PPE ethtype profile ID for slow protocols */
 #define ETH_P_NONE			0
 
+static int nss_dp_bridge_attr_set(struct net_device *dev,
+				const struct switchdev_attr *attr);
+
+static bool switch_init_done;
+
 /*
  * nss_dp_set_slow_proto_filter()
- * 	Enable/Disable filter to allow Ethernet slow-protocol
+ *	Enable/Disable filter to allow Ethernet slow-protocol
  */
 static void nss_dp_set_slow_proto_filter(struct nss_dp_dev *dp_priv, bool filter_enable)
 {
@@ -289,15 +299,14 @@ static int nss_dp_port_attr_set(struct net_device *dev,
 
 	switch (attr->id) {
 	case SWITCHDEV_ATTR_ID_PORT_BRIDGE_FLAGS:
-		dp_priv->brport_flags = attr->u.brport_flags;
-		netdev_dbg(dev, "set brport_flags %lu\n", attr->u.brport_flags);
-		return 0;
+	case SWITCHDEV_ATTR_ID_PORT_PRE_BRIDGE_FLAGS:
+	case SWITCHDEV_ATTR_ID_BRIDGE_AGEING_TIME:
+		return nss_dp_bridge_attr_set(dev, attr);
 	case SWITCHDEV_ATTR_ID_PORT_STP_STATE:
 		return nss_dp_stp_state_set(dp_priv, attr->u.stp_state);
 	default:
 		return -EOPNOTSUPP;
 	}
-
 }
 
 /*
@@ -308,6 +317,16 @@ static int nss_dp_switchdev_port_attr_set_event(struct net_device *netdev,
 		struct switchdev_notifier_port_attr_info *port_attr_info)
 {
 	int err;
+
+	/*
+	 * If event is port event then dev must be physical devices
+	 * this check to is prevent port event operation on non physical device
+	 */
+	if (!nss_dp_is_phy_dev(netdev) &&
+			port_attr_info->attr->id < SWITCHDEV_ATTR_ID_BRIDGE_AGEING_TIME) {
+		netdev_dbg(netdev, "Port operation is not supported for non port dev\n");
+		return NOTIFY_DONE;
+	}
 
 	err = nss_dp_port_attr_set(netdev, port_attr_info->attr,
 				   port_attr_info->trans);
@@ -325,13 +344,6 @@ static int nss_dp_switchdev_event(struct notifier_block *unused,
 {
 	struct net_device *dev = switchdev_notifier_info_to_dev(ptr);
 
-	/*
-	 * Handle switchdev event only for physical devices
-	 */
-	if (!nss_dp_is_phy_dev(dev)) {
-		return NOTIFY_DONE;
-	}
-
 	if (event == SWITCHDEV_PORT_ATTR_SET)
 		nss_dp_switchdev_port_attr_set_event(dev, ptr);
 
@@ -342,7 +354,169 @@ static struct notifier_block nss_dp_switchdev_notifier = {
 	.notifier_call = nss_dp_switchdev_event,
 };
 
-static bool switch_init_done;
+#ifdef NSS_DP_SW_BR_OPS
+/*
+ * nss_dp_bridge_attr_set()
+ *	Sets bridge attributes
+ */
+static int nss_dp_bridge_attr_set(struct net_device *dev,
+				const struct switchdev_attr *attr)
+{
+	bool learning = false;
+	ppe_drv_ret_t err;
+	struct ppe_drv_iface *iface;
+
+	switch (attr->id) {
+	case SWITCHDEV_ATTR_ID_PORT_PRE_BRIDGE_FLAGS:
+		return attr->u.brport_flags & ~(BR_LEARNING);
+	case SWITCHDEV_ATTR_ID_BRIDGE_AGEING_TIME:
+		if (attr->u.ageing_time == 0) {
+			netdev_dbg(dev, "Ageing time 0 is not supported\n");
+			return -EOPNOTSUPP;
+		}
+
+		err = ppe_drv_br_set_ageing_time(attr->u.ageing_time / 100);
+		if (err != PPE_DRV_RET_SUCCESS) {
+			pr_info("Failed to set ageing time with err_no %d\n", err);
+			return -EIO;
+		}
+		break;
+
+	case SWITCHDEV_ATTR_ID_PORT_BRIDGE_FLAGS:
+		learning = attr->u.brport_flags & (BR_LEARNING);
+		iface = ppe_drv_iface_get_by_dev(dev);
+		if (!iface) {
+			pr_info("Failed to get iface for interface %s\n", dev->name);
+			return -EINVAL;
+		}
+
+		err = ppe_drv_br_port_set_learning(iface, learning);
+		if (err != PPE_DRV_RET_SUCCESS) {
+			pr_info("Failed to set bridge port learning %s with err_no %d\n",
+					(learning ? "enable" : "disable"), err);
+			return -EIO;
+		}
+		break;
+
+	default:
+		pr_info("Operation %u is not supported\n", attr->id);
+		return -EOPNOTSUPP;
+	}
+
+	return 0;
+}
+
+/*
+ * nss_dp_fdb_event
+ *	fdb add/del event call
+ */
+static int nss_dp_fdb_event(struct switchdev_notifier_fdb_info *fdb_info,
+		unsigned long event, struct net_device *dev)
+{
+	struct net_device *br_dev;
+	ppe_drv_ret_t err;
+	struct ppe_drv_iface *ppe_iface;
+	int ret = NOTIFY_DONE;
+	struct nss_dp_dev *dp_priv = (struct nss_dp_dev *)netdev_priv(dev);
+
+	/*
+	 * Handle only static FDB events
+	 */
+	if (!fdb_info->added_by_user)
+		return 0;
+
+	rcu_read_lock();
+	br_dev = netdev_master_upper_dev_get_rcu(dev);
+	rcu_read_unlock();
+	if (unlikely(!br_dev)) {
+		pr_info("Fail to get bridge dev\n");
+		ret = notifier_from_errno(-EINVAL);
+		goto out;
+	}
+
+	ppe_iface = ppe_drv_iface_get_by_dev(br_dev);
+	if (unlikely(!ppe_iface)) {
+		pr_info("Failed to get ppe_drv_iface\n");
+		ret = notifier_from_errno(-EINVAL);
+		goto out;
+	}
+
+	switch (event) {
+	case SWITCHDEV_FDB_ADD_TO_DEVICE:
+		err = ppe_drv_br_fdb_add(ppe_iface,
+				(unsigned char *)fdb_info->addr, true, dp_priv->macid);
+		if (err != PPE_DRV_RET_SUCCESS) {
+			pr_info("Failed to add fdb %pM with err_no %d\n", fdb_info->addr,
+					err);
+			ret = notifier_from_errno(-EIO);
+			goto out;
+		}
+		break;
+
+	case SWITCHDEV_FDB_DEL_TO_DEVICE:
+		err = ppe_drv_br_fdb_del_bymac(ppe_iface,
+				(unsigned char *)fdb_info->addr);
+		if (err != PPE_DRV_RET_SUCCESS) {
+			pr_info("Failed to del fdb %pM with err_no %d\n", fdb_info->addr,
+					err);
+			ret = notifier_from_errno(-EIO);
+			goto out;
+		}
+		break;
+	}
+
+out:
+	return ret;
+}
+
+/*
+ * nss_dp_switchdev_event_nb
+ *	Non blocking switchdev event for netdevice
+ */
+static int nss_dp_switchdev_event_nb(struct notifier_block *unused,
+		unsigned long event, void *ptr)
+{
+	struct net_device *dev = switchdev_notifier_info_to_dev(ptr);
+	switch (event) {
+	case SWITCHDEV_PORT_ATTR_SET:
+		return nss_dp_switchdev_port_attr_set_event(dev, ptr);
+		break;
+
+	case SWITCHDEV_FDB_ADD_TO_DEVICE:
+	case SWITCHDEV_FDB_DEL_TO_DEVICE:
+		return nss_dp_fdb_event(ptr, event, dev);
+		break;
+
+	default:
+		pr_info("Switchdev event %lu is not supported\n", event);
+	}
+
+	return NOTIFY_DONE;
+}
+
+/*
+ * switchdev non blocking event
+ */
+static struct notifier_block nss_dp_switchdev_notifier_nb = {
+	.notifier_call = nss_dp_switchdev_event_nb,
+};
+
+static struct notifier_block *nss_dp_sw_ev_nb = &nss_dp_switchdev_notifier_nb;
+
+#else
+
+static struct notifier_block *nss_dp_sw_ev_nb;
+
+/*
+ * nss_dp_bridge_attr_set()
+ *	Sets bridge attributes
+ */
+static int nss_dp_bridge_attr_set(struct net_device *dev,
+				const struct switchdev_attr *attr)
+{
+	return 0;
+}
+#endif /* NSS_DP_SW_BR_OPS */
 
 /*
  * nss_dp_switchdev_setup()
@@ -361,7 +535,17 @@ void nss_dp_switchdev_setup(struct net_device *dev)
 		netdev_dbg(dev, "%px:Failed to register switchdev notifier\n", dev);
 	}
 
-	switch_init_done = true;
+	/*
+	 * Register non blocking notifier for switchdev
+	 */
+	if (nss_dp_sw_ev_nb) {
+		err = register_switchdev_notifier(nss_dp_sw_ev_nb);
+		if (err) {
+			netdev_dbg(dev, "%px:Failed to register non blocking switchdev \
+					notifier\n", dev);
+		}
+	}
 
+	switch_init_done = true;
 }
 #endif

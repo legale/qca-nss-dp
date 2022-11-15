@@ -2,6 +2,8 @@
  **************************************************************************
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
  *
+ * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved
+ *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all copies.
@@ -54,6 +56,10 @@ static int32_t nss_dp_get_strset_count(struct net_device *netdev, int32_t sset)
 {
 	struct nss_dp_dev *dp_priv = (struct nss_dp_dev *)netdev_priv(netdev);
 
+	if (sset == ETH_SS_PRIV_FLAGS) {
+		return NSS_DP_MAX_ETHTOOL_PRIV_FLAGS;
+	}
+
 	return dp_priv->gmac_hal_ops->getssetcount(dp_priv->gmac_hal_ctx, sset);
 }
 
@@ -63,10 +69,17 @@ static int32_t nss_dp_get_strset_count(struct net_device *netdev, int32_t sset)
 static void nss_dp_get_strings(struct net_device *netdev, uint32_t stringset,
 			uint8_t *data)
 {
+	int i;
 	struct nss_dp_dev *dp_priv = (struct nss_dp_dev *)netdev_priv(netdev);
-
 	dp_priv->gmac_hal_ops->getstrings(dp_priv->gmac_hal_ctx, stringset,
 					  data);
+
+	if (stringset == ETH_SS_PRIV_FLAGS) {
+		for (i = 0; i < NSS_DP_MAX_ETHTOOL_PRIV_FLAGS; i++) {
+			memcpy(data + (i * ETH_GSTRING_LEN),
+					nss_dp_priv_flg_str[i], ETH_GSTRING_LEN);
+		}
+	}
 }
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0))
@@ -361,6 +374,24 @@ static int32_t nss_dp_set_eee(struct net_device *netdev, struct ethtool_eee *eee
 }
 
 /*
+ * nss_dp_get_priv_flags()
+ *	get ethtool private flags
+ */
+static u32 nss_dp_get_priv_flags(struct net_device *dev)
+{
+	return __nss_dp_get_priv_flags(dev);
+}
+
+/*
+ * nss_dp_set_priv_flags()
+ *	set ethtool private flags
+ */
+static int nss_dp_set_priv_flags(struct net_device *dev, u32 flags)
+{
+	return __nss_dp_set_priv_flags(dev, flags);
+}
+
+/*
  * Ethtool operations
  */
 struct ethtool_ops nss_dp_ethtool_ops = {
@@ -379,6 +410,8 @@ struct ethtool_ops nss_dp_ethtool_ops = {
 	.set_pauseparam = &nss_dp_set_pauseparam,
 	.get_eee = &nss_dp_get_eee,
 	.set_eee = &nss_dp_set_eee,
+	.get_priv_flags = nss_dp_get_priv_flags,
+	.set_priv_flags = nss_dp_set_priv_flags,
 };
 
 /*

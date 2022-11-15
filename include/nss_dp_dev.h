@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2021-2022, Qualcomm Innovation Center, Inc. All rights reserved
+ * Copyright (c) 2021-2023, Qualcomm Innovation Center, Inc. All rights reserved
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -108,6 +108,97 @@
 #define NSS_DP_VP_MAC_ID		(NSS_DP_HAL_MAX_PORTS + 2)
 #endif
 
+/*
+ * TODO - move NSS_DP_ETHTOOL_MRR_OPS section to nss_dp_ethtool_priv.h
+ */
+#ifdef NSS_DP_ETHTOOL_MRR_OPS
+/*
+ * nss_dp_priv_flags_bit_no
+ *	ethtool private flags
+ */
+enum nss_dp_priv_flags_bit_no {
+	NSS_DP_MIRR_IN_FLG_BIT = 0,
+	NSS_DP_MIRR_EG_FLG_BIT,
+	NSS_DP_MIRR_ANALYSIS_IN_FLG_BIT,
+	NSS_DP_MIRR_ANALYSIS_EG_FLG_BIT,
+	NSS_DP_FLUSH_FDB_BY_PORT,
+	NSS_DP_FLUSH_ALL_FDB,
+	NSS_DP_MAX_ETHTOOL_PRIV_FLAGS,
+};
+
+/* No change in ethtool private flag */
+#define NSS_DP_NO_PRIV_FLAG_CHANGE	0
+
+/* Mirror ingress priv flag bit */
+#define NSS_DP_MIRR_IN_ENABLE	(1 << NSS_DP_MIRR_IN_FLG_BIT)
+
+/* Mirror egress priv flag bit */
+#define NSS_DP_MIRR_EG_ENABLE	(1 << NSS_DP_MIRR_EG_FLG_BIT)
+
+/* Analysis mirror ingress priv flag bit */
+#define NSS_DP_MIRR_ANALYSIS_IN_ENABLE	(1 << NSS_DP_MIRR_ANALYSIS_IN_FLG_BIT)
+
+/* Analysis mirror egress priv flag bit */
+#define NSS_DP_MIRR_ANALYSIS_EG_ENABLE	(1 << NSS_DP_MIRR_ANALYSIS_EG_FLG_BIT)
+
+/* Flush FDB by port priv flag */
+#define NSS_DP_FLUSH_FDB_BY_PORT_ENABLE	(1 << NSS_DP_FLUSH_FDB_BY_PORT)
+
+/* Flush all FDB entries priv flag bit */
+#define NSS_DP_FLUSH_ALL_FDB_ENABLE	(1 << NSS_DP_FLUSH_ALL_FDB)
+
+/*
+ * nss-dp ethtool private flags
+ */
+static const char nss_dp_priv_flg_str[][ETH_GSTRING_LEN] = {
+	"Mirror-set-ingress",
+	"Mirror-set-egress",
+	"Mirror-set-analysis-ingress",
+	"Mirror-set-analysis-egress",
+	"Flush-fdb-by-port",
+	"Flush-fdb-all",
+};
+
+/**
+ * __nss_dp_set_priv_flags()
+ *	set ethtool private flags
+ */
+int __nss_dp_set_priv_flags(struct net_device *dev, u32 flags);
+
+/**
+ * __nss_dp_get_priv_flags()
+ *	get ethtool private flags
+ */
+u32 __nss_dp_get_priv_flags(struct net_device *dev);
+
+#else
+
+#define NSS_DP_MAX_ETHTOOL_PRIV_FLAGS	0
+
+/**
+ * __nss_dp_set_priv_flags()
+ *	set ethtool private flags
+ */
+static inline int __nss_dp_set_priv_flags(struct net_device *dev, u32 flags)
+{
+	return -EOPNOTSUPP;
+}
+
+/**
+ * __nss_dp_get_priv_flags()
+ *	get ethtool private flags
+ */
+static inline u32 __nss_dp_get_priv_flags(struct net_device *dev)
+{
+	return 0;
+}
+
+static const char nss_dp_priv_flg_str[][ETH_GSTRING_LEN] = {
+	"",
+};
+
+#endif /* NSS_DP_ETHTOOL_MRR_OPS */
+
 struct nss_dp_global_ctx;
 
 /*
@@ -153,6 +244,9 @@ struct nss_dp_dev {
 #endif
 	uint32_t rx_page_mode;		/* page mode for Rx processing */
 	uint32_t rx_jumbo_mru;		/* Jumbo mru value for Rx processing */
+#ifdef NSS_DP_ETHTOOL_MRR_OPS
+	uint32_t ethtool_priv_flags;	/* Ethtool private flags */
+#endif /* NSS_DP_ETHTOOL_MRR_OPS */
 };
 
 /*

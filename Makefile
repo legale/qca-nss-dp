@@ -49,6 +49,7 @@ endif
 
 ifeq ($(SoC),$(filter $(SoC),ipq95xx ipq53xx))
 qca-nss-dp-objs += nss_dp_vp_main.o \
+		   nss_dp_ethtool_priv.o \
 		   hal/dp_ops/edma_dp/edma_v2/edma.o \
 		   hal/dp_ops/edma_dp/edma_v2/edma_cfg_rx.o \
 		   hal/dp_ops/edma_dp/edma_v2/edma_cfg_tx.o \
@@ -67,7 +68,7 @@ ccflags-y += -DNSS_DP_PPEDS_SUPPORT
 endif
 NSS_DP_INCLUDE += -I$(obj)/hal/dp_ops/edma_dp/edma_v2
 NSS_DP_INCLUDE += -I$(obj)/hal/dp_ops/edma_dp/edma_v2/include
-ccflags-y += -DNSS_DP_ENABLE_NAPI_GRO -DNSS_DP_VP_SUPPORT -DNSS_DP_EDMA_V2 -DNSS_DP_MAC_POLL_SUPPORT
+ccflags-y += -DNSS_DP_ENABLE_NAPI_GRO -DNSS_DP_VP_SUPPORT -DNSS_DP_EDMA_V2 -DNSS_DP_MAC_POLL_SUPPORT -DNSS_DP_SW_BR_OPS -DNSS_DP_ETHTOOL_MRR_OPS
 endif
 
 ifeq ($(SoC),$(filter $(SoC),ipq53xx))
