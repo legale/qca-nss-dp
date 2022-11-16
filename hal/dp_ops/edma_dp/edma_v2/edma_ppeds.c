@@ -34,15 +34,14 @@ static int edma_ppeds_rx_fill_ring_alloc(struct edma_rxfill_ring *rxfill_ring)
 	/*
 	 * Allocate RxFill ring descriptors
 	 */
-	rxfill_ring->desc = kmalloc((sizeof(struct edma_rxfill_desc) * rxfill_ring->count) +
-				SMP_CACHE_BYTES,  GFP_KERNEL | __GFP_ZERO);
+	rxfill_ring->desc = dma_alloc_coherent(&edma_gbl_ctx.pdev->dev,
+				(sizeof(struct edma_rxfill_desc) * rxfill_ring->count),
+				&rxfill_ring->dma, GFP_KERNEL | __GFP_ZERO);
 	if (!rxfill_ring->desc) {
 		edma_err("Descriptor alloc for RXFILL ring %u failed\n",
 							rxfill_ring->ring_id);
 		return -ENOMEM;
 	}
-
-	rxfill_ring->dma = (dma_addr_t)virt_to_phys(rxfill_ring->desc);
 
 	return 0;
 }
@@ -56,7 +55,9 @@ static void edma_ppeds_rx_fill_ring_free(struct edma_rxfill_ring *rxfill_ring)
 	/*
 	 * Free RXFILL ring descriptors
 	 */
-	kfree(rxfill_ring->desc);
+	dma_free_coherent(&edma_gbl_ctx.pdev->dev,
+			(sizeof(struct edma_rxfill_desc) * rxfill_ring->count),
+			rxfill_ring->desc, rxfill_ring->dma);
 	rxfill_ring->desc = NULL;
 	rxfill_ring->dma = (dma_addr_t)0;
 }
@@ -99,15 +100,14 @@ static void edma_ppeds_rx_secondary_free(struct edma_rxdesc_ring *rxdesc_ring)
  */
 static int edma_ppeds_tx_cmpl_ring_alloc(struct edma_txcmpl_ring *txcmpl_ring)
 {
-	txcmpl_ring->desc = kmalloc((sizeof(struct edma_txcmpl_desc) *  txcmpl_ring->count) +
-				SMP_CACHE_BYTES,  GFP_KERNEL | __GFP_ZERO);
+	txcmpl_ring->desc = dma_alloc_coherent(&edma_gbl_ctx.pdev->dev,
+				(sizeof(struct edma_txcmpl_desc) *  txcmpl_ring->count),
+				&txcmpl_ring->dma, GFP_KERNEL | __GFP_ZERO);
 	if (!txcmpl_ring->desc) {
 		edma_err("Descriptor alloc for TXCMPL ring %u failed\n",
 				txcmpl_ring->id);
 		return -ENOMEM;
 	}
-
-	txcmpl_ring->dma = (dma_addr_t)virt_to_phys(txcmpl_ring->desc);
 
 	return 0;
 }
@@ -118,7 +118,9 @@ static int edma_ppeds_tx_cmpl_ring_alloc(struct edma_txcmpl_ring *txcmpl_ring)
  */
 static void edma_ppeds_tx_cmpl_ring_free(struct edma_txcmpl_ring *txcmpl_ring)
 {
-	kfree(txcmpl_ring->desc);
+	dma_free_coherent(&edma_gbl_ctx.pdev->dev,
+			(sizeof(struct edma_txcmpl_desc) *  txcmpl_ring->count),
+			txcmpl_ring->desc, txcmpl_ring->dma);
 	txcmpl_ring->desc = NULL;
 	txcmpl_ring->dma = (dma_addr_t)0;
 }
@@ -166,7 +168,7 @@ static uint32_t edma_ppeds_tx_complete(uint32_t work_to_do, struct edma_txcmpl_r
 	struct edma_ppeds *ppeds_node = container_of(txcmpl_ring, struct edma_ppeds, txcmpl_ring);
 	nss_dp_ppeds_handle_t *ppeds_handle = &ppeds_node->ppeds_handle;
 	struct edma_txcmpl_desc *txcmpl;
-	uint32_t cons_idx, prod_idx, data, avail, end_idx;
+	uint32_t cons_idx, prod_idx, data, avail;
 	uint16_t count;
 
 	cons_idx = txcmpl_ring->cons_idx;
@@ -183,20 +185,9 @@ static uint32_t edma_ppeds_tx_complete(uint32_t work_to_do, struct edma_txcmpl_r
 	}
 
 	avail = min(avail, work_to_do);
-
 	count = avail;
 
-	end_idx = (cons_idx + avail) & (txcmpl_ring->count - 1);
 	txcmpl = EDMA_TXCMPL_DESC(txcmpl_ring, cons_idx);
-
-	if (end_idx > cons_idx) {
-		dmac_inv_range_no_dsb((void *)txcmpl, txcmpl + avail);
-	} else {
-		dmac_inv_range_no_dsb(txcmpl_ring->desc, txcmpl_ring->desc + end_idx);
-		dmac_inv_range_no_dsb((void *)txcmpl, txcmpl_ring->desc + txcmpl_ring->count);
-	}
-
-	dsb(st);
 
 	while (likely(avail--)) {
 		ppeds_handle->tx_cmpl_arr[count - avail - 1].cookie = EDMA_TXCMPL_OPAQUE_GET(txcmpl);
@@ -286,26 +277,6 @@ static void edma_ppeds_rx_alloc_buffer(struct edma_rxfill_ring *rxfill_ring, int
 	}
 
 	if (likely(num_alloc)) {
-		uint16_t end_idx =
-			(start_idx + num_alloc) & ring_size_mask;
-
-		rxfill_desc = EDMA_RXFILL_DESC(rxfill_ring, start_idx);
-
-		/*
-		 * Write-back all the cached descriptors
-		 * that are processed.
-		 */
-		if (end_idx > start_idx) {
-			dmac_clean_range((void *)rxfill_desc,
-					(void *)(rxfill_desc + num_alloc));
-		} else {
-			dmac_clean_range((void *)rxfill_ring->desc,
-					(void *)(rxfill_ring->desc + end_idx));
-			dmac_clean_range((void *)rxfill_desc,
-					(void *)(rxfill_ring->desc +
-							rxfill_ring->count));
-		}
-
 		edma_reg_write(EDMA_REG_RXFILL_PROD_IDX(rxfill_ring->ring_id),
 								prod_idx);
 		rxfill_ring->prod_idx = prod_idx;
