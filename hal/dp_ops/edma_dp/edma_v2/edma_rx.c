@@ -253,6 +253,18 @@ static inline void edma_rx_checksum_verify(struct edma_rxdesc_desc *rxdesc_desc,
 }
 
 /*
+ * edma_rx_sc_stats_update()
+ *	Update per-service code stats.
+ */
+static inline void edma_rx_sc_stats_update(struct sk_buff *skb, struct edma_sc_stats *sc_stats)
+{
+	u64_stats_update_begin(&sc_stats->syncp);
+	sc_stats->rx_bytes += skb->len;
+	sc_stats->rx_packets++;
+	u64_stats_update_end(&sc_stats->syncp);
+}
+
+/*
  * edma_rx_handle_sc_cc_packets()
  *	Handle packets with service code or CPU code.
  *
@@ -297,6 +309,12 @@ static inline bool edma_rx_handle_sc_cc_packets(struct edma_gbl_ctx *egc,
 	 */
 	service_code = EDMA_RXDESC_SERVICE_CODE_GET(rxdesc_head);
 	if (likely(service_code)) {
+
+		/*
+		 * Update stats for the SAWF service code.
+		 */
+		edma_rx_sc_stats_update(skb, &egc->sc_stats[service_code]);
+
 		if (ppe_drv_sc_process_skbuff(service_code, skb)) {
 			return true;
 		}

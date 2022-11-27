@@ -63,6 +63,31 @@ EXPORT_SYMBOL(nss_dp_point_offload_info_get);
 #endif
 
 /*
+ * edma_nsm_sc_stats_update()
+ *	Update stats in NSM for given service code.
+ */
+bool edma_nsm_sc_stats_update(struct edma_nsm_sc_stats *nsm_stats, uint8_t service_class)
+{
+	uint8_t service_code = service_class + PPE_DRV_SC_SAWF_START;
+	struct edma_sc_stats *sc_stats = &edma_gbl_ctx.sc_stats[service_code];
+	unsigned int start;
+
+	if ((service_code < PPE_DRV_SC_SAWF_START) || (service_code > PPE_DRV_SC_SAWF_END)) {
+		edma_warn("%u Invalid SAWF service code.", service_code);
+		return false;
+	}
+
+	do {
+		start = u64_stats_fetch_begin_irq(&sc_stats->syncp);
+		nsm_stats->rx_packets = sc_stats->rx_packets;
+		nsm_stats->rx_bytes = sc_stats->rx_bytes;
+	} while (u64_stats_fetch_retry_irq(&sc_stats->syncp, start));
+
+	return true;
+}
+EXPORT_SYMBOL(edma_nsm_sc_stats_update);
+
+/*
  * edma_disable_interrupts()
  *	Disable EDMA RX/TX interrupt masks.
  */
