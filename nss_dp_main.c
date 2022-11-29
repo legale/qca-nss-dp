@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2021-2022, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -526,6 +526,21 @@ static u16 __attribute__((unused)) nss_dp_select_queue(struct net_device *netdev
 	return cpu;
 }
 
+static netdev_features_t __attribute__((unused)) nss_dp_feature_check(struct sk_buff *skb,
+									struct net_device *dev,
+									netdev_features_t features)
+{
+	/*
+	 * IPQ50XX does not support HW checksum of double vlan tagged packets.
+	 * Disable the feature at runtime during feature check.
+	 */
+	if (skb_vlan_tagged_multi(skb)) {
+		features &= ~(NETIF_F_HW_CSUM | NETIF_F_TSO | NETIF_F_TSO6);
+	}
+
+	return features;
+}
+
 /*
  * Netdevice operations
  */
@@ -544,7 +559,10 @@ struct net_device_ops nss_dp_netdev_ops = {
 	.ndo_bridge_getlink = switchdev_port_bridge_getlink,
 	.ndo_bridge_dellink = switchdev_port_bridge_dellink,
 #endif
-#ifndef NSS_DP_IPQ50XX
+
+#ifdef NSS_DP_IPQ50XX
+	.ndo_features_check = nss_dp_feature_check,
+#else
 	.ndo_select_queue = nss_dp_select_queue,
 #endif
 
