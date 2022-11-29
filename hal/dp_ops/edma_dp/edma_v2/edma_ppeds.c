@@ -807,7 +807,8 @@ void edma_ppeds_inst_refill(nss_dp_ppeds_handle_t *ppeds_handle, int count)
 	struct edma_rxfill_ring *rxfill_ring = &ppeds_node->rxfill_ring;
 
 	read_lock_bh(&drv->lock);
-	if (node_cfg->node_state != EDMA_PPEDS_NODE_STATE_REG_DONE) {
+	if ((node_cfg->node_state != EDMA_PPEDS_NODE_STATE_REG_DONE) &&
+		(node_cfg->node_state != EDMA_PPEDS_NODE_STATE_STOP_DONE)) {
 		edma_err("%px: Invalid node state: %d, PPE-DS rxfill failed\n", ppeds_node,
 				node_cfg->node_state);
 		read_unlock_bh(&drv->lock);
@@ -914,7 +915,8 @@ int edma_ppeds_inst_start(nss_dp_ppeds_handle_t *ppeds_handle, uint8_t intr_enab
 	struct edma_ppeds_node_cfg *node_cfg = &(drv->ppeds_node_cfg[ppeds_node->db_idx]);
 
 	write_lock_bh(&drv->lock);
-	if (node_cfg->node_state != EDMA_PPEDS_NODE_STATE_REG_DONE) {
+	if ((node_cfg->node_state != EDMA_PPEDS_NODE_STATE_REG_DONE) &&
+		(node_cfg->node_state != EDMA_PPEDS_NODE_STATE_STOP_DONE)) {
 		edma_err("%px: Invalid node state: %d, PPE-DS start failed\n", ppeds_node,
 				node_cfg->node_state);
 		write_unlock_bh(&drv->lock);
