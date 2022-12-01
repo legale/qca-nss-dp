@@ -273,5 +273,9 @@ void nss_dp_hal_cleanup(void)
  */
 struct nss_dp_ppeds_ops *nss_dp_ppeds_ops_get(void)
 {
+#ifdef NSS_DP_PPEDS_SUPPORT
+	return &edma_ppeds_ops;
+#else
 	return NULL;
+#endif
 }
