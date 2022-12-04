@@ -40,6 +40,7 @@ struct nss_dp_ppeds_tx_cmpl_elem {
  *	PPE-DS DP handle info
  */
 typedef struct nss_dp_ppeds_handle {
+	bool polling_for_idx_update;	/**< DS poll mode used */
 	dma_addr_t ppe2tcl_ba;		/**< PPE2TCL ring's base address */
 	dma_addr_t reo2ppe_ba;		/**< REO2PPE ring's base address */
 	uint32_t ppe2tcl_num_desc;	/**< PPE2TCL descriptor count */
@@ -64,6 +65,9 @@ struct nss_dp_ppeds_cb {
 				/**< PPE-DS EDMA Tx descriptor free callback */
 	void (*tx_cmpl)(nss_dp_ppeds_handle_t *, uint16_t cons_idx);
 				/**< PPE-DS EDMA Tx complete callback */
+	void (*enable_wlan_intr)(nss_dp_ppeds_handle_t *edma_handle,
+				bool enable);
+				/**< PPE-DS toggle wlan interrupt */
 };
 
 /*
@@ -93,6 +97,8 @@ struct nss_dp_ppeds_ops {
 				/**< PPE-DS Tx consumer index get operation */
 	uint16_t (*get_rx_prod_idx)(nss_dp_ppeds_handle_t *ppeds_handle);
 				/**< PPE-DS Rx producer index get operation */
+	void (*enable_rx_reap_intr)(nss_dp_ppeds_handle_t *ppeds_handle);
+				/**< PPE-DS enable edma interrupt */
 };
 
 /**

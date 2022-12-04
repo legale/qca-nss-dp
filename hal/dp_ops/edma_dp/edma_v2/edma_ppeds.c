@@ -576,6 +576,54 @@ static void edma_ppeds_cfg_rx(struct edma_ppeds *ppeds_node)
 }
 
 /*
+ * edma_ppeds_rx_handle_irq
+ *	Disable edma interrupt and enable wlan interrupt
+ */
+irqreturn_t edma_ppeds_rx_handle_irq(int irq, void *ctx)
+{
+	struct edma_rxdesc_ring *rxdesc_ring = (struct edma_rxdesc_ring *)ctx;
+	struct edma_ppeds *ppeds_node =
+			container_of(rxdesc_ring, struct edma_ppeds, rx_ring);
+
+	/*
+	 * Clear RxDesc ring interrupt mask
+	 */
+	edma_reg_write(EDMA_REG_RXDESC_INT_MASK(rxdesc_ring->ring_id),
+			EDMA_MASK_INT_CLEAR);
+
+	/*
+	 * Enable wlan interrupt
+	 */
+	ppeds_node->ops->enable_wlan_intr(&ppeds_node->ppeds_handle, true);
+
+	return IRQ_HANDLED;
+}
+
+/*
+ * edma_ppeds_enable_rx_reap_intr()
+ *	PPEDS enable edma interrupt
+ */
+static void edma_ppeds_enable_rx_reap_intr(nss_dp_ppeds_handle_t *ppeds_handle)
+{
+	struct edma_ppeds *ppeds_node =
+		container_of(ppeds_handle, struct edma_ppeds, ppeds_handle);
+	struct edma_rxdesc_ring *rx_ring = &ppeds_node->rx_ring;
+	uint32_t status;
+
+	/*
+	 * Clear on Read
+	 */
+	status = edma_reg_read(EDMA_REG_RXDESC_INT_STAT(rx_ring->ring_id)) &
+			EDMA_RXDESC_RING_INT_STATUS_MASK;
+
+	/*
+	 * Set RXDESC ring interrupt mask
+	 */
+	edma_reg_write(EDMA_REG_RXDESC_INT_MASK(rx_ring->ring_id),
+			EDMA_RXDESC_INT_MASK_PKT_INT);
+}
+
+/*
  * edma_ppeds_inst_register()
  *	PPE-DS EDMA instance registration API
  */
@@ -665,10 +713,23 @@ bool edma_ppeds_inst_register(nss_dp_ppeds_handle_t *ppeds_handle)
 	irq_set_status_flags(ppeds_node->rxdesc_intr, IRQ_DISABLE_UNLAZY);
 	snprintf(edma_ppeds_rxdesc_irq_name[ppeds_node->db_idx], 32,
 			 "edma_ppeds_rxdesc_%d", ppeds_node->db_idx);
-	ret = request_irq(ppeds_node->rxdesc_intr,
-			edma_rx_handle_irq, IRQF_SHARED,
-			edma_ppeds_rxdesc_irq_name[ppeds_node->db_idx],
-			(void *)&ppeds_node->rx_ring);
+
+	/*
+	 * If poll mode is disabled, handle the rx_ring interrupts in irq mode,
+	 * Otherwise handle them in polling mode using Napi.
+	 */
+	if (ppeds_handle->polling_for_idx_update) {
+		ret = request_irq(ppeds_node->rxdesc_intr,
+				edma_rx_handle_irq, IRQF_SHARED,
+				edma_ppeds_rxdesc_irq_name[ppeds_node->db_idx],
+				(void *)&ppeds_node->rx_ring);
+	} else {
+		ret = request_irq(ppeds_node->rxdesc_intr,
+				edma_ppeds_rx_handle_irq, IRQF_SHARED,
+				edma_ppeds_rxdesc_irq_name[ppeds_node->db_idx],
+				(void *)&ppeds_node->rx_ring);
+	}
+
 	if (ret) {
 		edma_err("PPEDS RXDESC ring IRQ:%d request failed for node %d\n",
 				ppeds_node->rxdesc_intr, ppeds_node->db_idx);
@@ -1218,4 +1279,5 @@ struct nss_dp_ppeds_ops edma_ppeds_ops = {
 	.set_tx_prod_idx	=	edma_ppeds_set_tx_prod_idx,
 	.get_tx_cons_idx	=	edma_ppeds_get_tx_cons_idx,
 	.get_rx_prod_idx	=	edma_ppeds_get_rx_prod_idx,
+	.enable_rx_reap_intr	=	edma_ppeds_enable_rx_reap_intr,
 };
