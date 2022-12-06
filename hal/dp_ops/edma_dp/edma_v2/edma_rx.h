@@ -134,13 +134,12 @@
 
 #define EDMA_RXFILL_PACKET_LEN_SET(desc, len)	{ \
 	(((desc)->word1) = (uint32_t)((((uint32_t)len) << EDMA_RXFILL_BUF_SIZE_SHIFT) & 0xFFFF0000)); \
-	cpu_to_le32s(&((desc)->word1)); \
 }
-#define EDMA_RXFILL_BUFFER_ADDR_SET(desc, addr)	(((desc)->word0) = (uint32_t)(cpu_to_le32(addr)))
-#define EDMA_RXDESC_SC_CC_VALID_GET(desc)	(((desc)->word1) & 0x01FF1000)
-#define EDMA_RXDESC_CPU_CODE_VALID_GET(desc)	((((desc)->word1) & 0x00001000) >> 12)
-#define EDMA_RXDESC_SERVICE_CODE_GET(desc)	((((desc)->word1) & 0x01FF0000) >> 16)
-#define EDMA_RXDESC_CPU_CODE_GET(desc)		((((desc)->word5) & 0x03FF0000) >> 16)
+#define EDMA_RXFILL_BUFFER_ADDR_SET(desc, addr)	(((desc)->word0) = (uint32_t)(addr))
+#define EDMA_RXDESC_SC_CC_VALID_GET(desc)	((le32_to_cpu((desc)->word1)) & 0x01FF1000)
+#define EDMA_RXDESC_CPU_CODE_VALID_GET(desc)	(((le32_to_cpu((desc)->word1)) & 0x00001000) >> 12)
+#define EDMA_RXDESC_SERVICE_CODE_GET(desc)	(((le32_to_cpu((desc)->word1)) & 0x01FF0000) >> 16)
+#define EDMA_RXDESC_CPU_CODE_GET(desc)		(((le32_to_cpu((desc)->word5)) & 0x03FF0000) >> 16)
 
 /*
  * Extracting Tree ID and WiFi-QoS from descriptor.
@@ -155,7 +154,7 @@
 /*
  * Check if WiFi-QoS flag is valid.
  */
-#define EDMA_RXDESC_WIFI_QOS_FLAG_VALID_GET(desc)	(((desc)->word1) & 0x00008000)
+#define EDMA_RXDESC_WIFI_QOS_FLAG_VALID_GET(desc)	((le32_to_cpu((desc)->word1)) & 0x00008000)
 
 /*
  * Tree_id related Macros.
@@ -194,6 +193,14 @@
 								(sc << EDMA_RX_SAWF_METADATA_SERVICE_CLASS_SHIFT) | \
 								(pi << EDMA_RX_SAWF_METADATA_PEER_ID_SHIFT) | \
 								msduq)
+/*
+ * Opaque values are set in word2 and word3, they are not accessed by the EDMA HW,
+ * so endianness conversion is not needed.
+*/
+#define EDMA_RXFILL_ENDIAN_SET(desc)	{ \
+	cpu_to_le32s(&((desc)->word0)); \
+	cpu_to_le32s(&((desc)->word1)); \
+}
 
 /*
  * RX DESC size shift to obtain index from descriptor pointer
