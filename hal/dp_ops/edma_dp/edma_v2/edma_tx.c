@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -321,17 +321,6 @@ static inline void edma_tx_fill_vp_desc(struct nss_dp_dev *dp_dev, struct edma_p
 	EDMA_DST_INFO_SET(txd, 0);
 }
 
-
-/*
- *  edma_tx_get_int_pri_from_skb()
- *      We retrieve int_pri from skb using this API
- *
- */
-static inline unsigned int edma_tx_get_int_pri_from_skb(struct sk_buff *skb)
-{
-	return skb->priority;
-}
-
 /*
  * edma_tx_fill_pp_desc()
  *	Populate descriptor fields to bypass PPE processing and forward
@@ -377,7 +366,7 @@ static inline void edma_tx_fill_pp_desc(struct nss_dp_dev *dp_dev, struct edma_p
 	/*
 	 * Set the tx queue priority for the packet
 	 */
-	EDMA_TXDESC_INT_PRI_SET(txd, edma_tx_get_int_pri_from_skb(skb));
+	EDMA_TXDESC_INT_PRI_SET(txd, skb_get_int_pri(skb));
 }
 
 /*
