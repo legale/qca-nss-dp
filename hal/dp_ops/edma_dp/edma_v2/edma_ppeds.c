@@ -289,46 +289,39 @@ static void edma_ppeds_rx_alloc_buffer(struct edma_rxfill_ring *rxfill_ring, int
  */
 static int edma_ppeds_rxfill_napi_poll(struct napi_struct *napi, int budget)
 {
-	uint32_t cons_idx, work_to_do, status;
+	uint32_t cons_idx, work_to_do;
 	uint32_t num_avail = 0;
 	struct edma_rxfill_ring *rxfill_ring = (struct edma_rxfill_ring *)napi;
 	struct edma_ppeds *ppeds_node = container_of(rxfill_ring, struct edma_ppeds, rxfill_ring);
 	uint32_t alloc_size = rxfill_ring->alloc_size;
 	uint32_t headroom = EDMA_RX_SKB_HEADROOM + NET_IP_ALIGN;
 
-	do {
-		cons_idx =
-			edma_reg_read(EDMA_REG_RXFILL_CONS_IDX(rxfill_ring->ring_id)) &
-			EDMA_RXFILL_CONS_IDX_MASK;
-		work_to_do = (cons_idx - rxfill_ring->prod_idx + rxfill_ring->count - 1) & (rxfill_ring->count - 1);
+	cons_idx = edma_reg_read(EDMA_REG_RXFILL_CONS_IDX(rxfill_ring->ring_id)) &
+				EDMA_RXFILL_CONS_IDX_MASK;
+	work_to_do = (cons_idx - rxfill_ring->prod_idx + rxfill_ring->count - 1) & (rxfill_ring->count - 1);
 
-		if (work_to_do > budget) {
-			work_to_do = budget;
-		}
+	if (work_to_do > budget) {
+		work_to_do = budget;
+	}
 
-		if (likely(work_to_do > 0)) {
-			num_avail = ppeds_node->ops->rx_fill(&ppeds_node->ppeds_handle, work_to_do, alloc_size, headroom);
-			edma_ppeds_rx_alloc_buffer(rxfill_ring, num_avail, ppeds_node->ppeds_handle.rx_fill_arr, headroom);
-		}
+	if (unlikely(!work_to_do)) {
+		goto napi_complete;
+	}
 
-		/*
-		 * Return if budget has exhausted
-		 */
-		if (likely(num_avail >= budget)) {
-			return num_avail;
-		}
+	num_avail = ppeds_node->ops->rx_fill(&ppeds_node->ppeds_handle, work_to_do,
+						alloc_size, headroom);
+	if (likely(num_avail))
+		edma_ppeds_rx_alloc_buffer(rxfill_ring, num_avail,
+						ppeds_node->ppeds_handle.rx_fill_arr, headroom);
 
-		/*
-		 * Clear on read
-		 */
-		status = EDMA_RXFILL_RING_INT_STATUS_MASK &
-			edma_reg_read(EDMA_REG_RXFILL_INT_STAT(rxfill_ring->ring_id));
-	} while (likely(status));
+	if (unlikely(num_avail < budget)) {
+		return num_avail;
+	}
 
+napi_complete:
 	napi_complete(napi);
 	edma_reg_write(EDMA_REG_RXFILL_INT_MASK(rxfill_ring->ring_id),
-			EDMA_RXFILL_INT_MASK);
-
+				EDMA_RXFILL_INT_MASK);
 	return 0;
 }
 
