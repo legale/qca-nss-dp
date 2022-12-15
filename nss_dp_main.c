@@ -199,19 +199,19 @@ static int32_t nss_dp_set_mac_address(struct net_device *netdev, void *macaddr)
 			addr->sa_data[2], addr->sa_data[3], addr->sa_data[4],
 			addr->sa_data[5]);
 
-	ret = eth_prepare_mac_addr_change(netdev, macaddr);
+	ret = eth_prepare_mac_addr_change(netdev, addr);
 	if (ret)
 		return ret;
 
-	if (dp_priv->data_plane_ops->mac_addr(dp_priv->dpc, macaddr)) {
+	if (dp_priv->data_plane_ops->mac_addr(dp_priv->dpc, (uint8_t *)addr->sa_data)) {
 		netdev_dbg(netdev, "Data plane set MAC address failed\n");
 		return -EAGAIN;
 	}
 
-	eth_commit_mac_addr_change(netdev, macaddr);
-
 	dp_priv->gmac_hal_ops->setmacaddr(dp_priv->gmac_hal_ctx,
 			(uint8_t *)addr->sa_data);
+
+	eth_commit_mac_addr_change(netdev, addr);
 
 	return 0;
 }
@@ -779,6 +779,7 @@ static int32_t nss_dp_probe(struct platform_device *pdev)
 	dp_priv->pdev = pdev;
 	dp_priv->netdev = netdev;
 	netdev->watchdog_timeo = 5 * HZ;
+	netdev->priv_flags |= IFF_LIVE_ADDR_CHANGE;
 	netdev->netdev_ops = &nss_dp_netdev_ops;
 	netdev->gso_max_segs = NSS_DP_GSO_MAX_SEGS;
 	nss_dp_set_ethtool_ops(netdev);
