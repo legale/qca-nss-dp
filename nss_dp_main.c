@@ -1002,6 +1002,16 @@ struct nss_dp_ppeds_ops *nss_dp_ppeds_get_ops(void)
 EXPORT_SYMBOL(nss_dp_ppeds_get_ops);
 
 /*
+ * nss_dp_nsm_sc_stats_read()
+ *	Send nsm stats for given service class.
+ */
+bool nss_dp_nsm_sc_stats_read(struct nss_dp_hal_nsm_sc_stats *nsm_stats, uint8_t service_class)
+{
+	return nss_dp_hal_nsm_sc_stats_read(nsm_stats, service_class);
+}
+EXPORT_SYMBOL(nss_dp_nsm_sc_stats_read);
+
+/*
  * nss_dp_init()
  */
 int __init nss_dp_init(void)

@@ -63,10 +63,10 @@ EXPORT_SYMBOL(nss_dp_point_offload_info_get);
 #endif
 
 /*
- * edma_nsm_sc_stats_update()
- *	Update stats in NSM for given service code.
+ * edma_nsm_sc_stats_read()
+ *	Read stats for NSM for a given service code.
  */
-bool edma_nsm_sc_stats_update(struct edma_nsm_sc_stats *nsm_stats, uint8_t service_class)
+bool edma_nsm_sc_stats_read(struct nss_dp_hal_nsm_sc_stats *nsm_stats, uint8_t service_class)
 {
 	uint8_t service_code = service_class + PPE_DRV_SC_SAWF_START;
 	struct edma_sc_stats *sc_stats = &edma_gbl_ctx.sc_stats[service_code];
@@ -85,7 +85,6 @@ bool edma_nsm_sc_stats_update(struct edma_nsm_sc_stats *nsm_stats, uint8_t servi
 
 	return true;
 }
-EXPORT_SYMBOL(edma_nsm_sc_stats_update);
 
 /*
  * edma_disable_interrupts()

@@ -21,6 +21,18 @@
 #include "nss_dp_hal.h"
 
 /*
+ * nss_dp_hal_nsm_sc_stats_read()
+ *	Send nsm stats for the given service-class.
+ */
+bool nss_dp_hal_nsm_sc_stats_read(struct nss_dp_hal_nsm_sc_stats *nsm_stats, uint8_t service_class)
+{
+	/*
+	 * TODO: Update the API whenever NSM support is enabled for IPQ53xx.
+	 */
+	return false;
+}
+
+/*
  * nss_dp_hal_get_data_plane_ops()
  *	Return the data plane ops for registered data plane.
  */
