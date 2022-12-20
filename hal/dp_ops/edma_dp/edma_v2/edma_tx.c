@@ -138,6 +138,7 @@ uint32_t edma_tx_complete(uint32_t work_to_do, struct edma_txcmpl_ring *txcmpl_r
 			 * from recycler and has been fast trasmitted
 			 */
 			if (likely(skb->fast_xmit) && likely(skb->is_from_recycler)) {
+				dev_check_skb_fast_recyclable(skb);
 				__skb_queue_head(&h, skb);
 			} else {
 				dev_kfree_skb(skb);
