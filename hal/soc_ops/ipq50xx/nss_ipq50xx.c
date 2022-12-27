@@ -22,6 +22,15 @@
 #include "nss_dp_hal.h"
 
 /*
+ * nss_dp_hal_nsm_sc_stats_read()
+ *	Send nsm stats for the given service-class.
+ */
+bool nss_dp_hal_nsm_sc_stats_read(struct nss_dp_hal_nsm_sc_stats *nsm_stats, uint8_t service_class)
+{
+	return false;
+}
+
+/*
  * nss_dp_hal_tcsr_base_get()
  *	Reads TCSR base address from DTS
  */

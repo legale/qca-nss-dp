@@ -127,6 +127,16 @@ struct nss_dp_hal_gmac_stats {
 	uint64_t hw_errs[10];		/**< GMAC DMA error counters */
 };
 
+/**
+ * nss_dp_hal_nsm_sc_stats
+ *	Per-service code stats to be send to NSM.
+ */
+struct nss_dp_hal_nsm_sc_stats {
+	uint64_t rx_packets;	/**< Packets received for a service code on the PPE queues. */
+	uint64_t rx_bytes;	/**< Bytes received for a service code on the PPE queues. */
+};
+
 extern struct nss_dp_data_plane_ops nss_dp_gmac_ops;
+extern bool nss_dp_hal_nsm_sc_stats_read(struct nss_dp_hal_nsm_sc_stats *nsm_stats, uint8_t service_class);
 
 #endif /* __NSS_DP_ARCH_H__ */

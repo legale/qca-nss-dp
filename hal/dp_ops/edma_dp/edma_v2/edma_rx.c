@@ -254,7 +254,7 @@ static inline void edma_rx_checksum_verify(struct edma_rxdesc_desc *rxdesc_desc,
 
 /*
  * edma_rx_sc_stats_update()
- *	Update per-service code stats.
+ *	Update per service-code stats.
  */
 static inline void edma_rx_sc_stats_update(struct sk_buff *skb, struct edma_sc_stats *sc_stats)
 {
