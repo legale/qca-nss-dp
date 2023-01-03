@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -314,10 +314,7 @@ static int edma_ppeds_rxfill_napi_poll(struct napi_struct *napi, int budget)
 		edma_ppeds_rx_alloc_buffer(rxfill_ring, num_avail,
 						ppeds_node->ppeds_handle.rx_fill_arr, headroom);
 
-	if (unlikely(num_avail < budget)) {
-		return num_avail;
-	}
-
+	edma_reg_read(EDMA_REG_RXFILL_INT_STAT(rxfill_ring->ring_id));
 napi_complete:
 	napi_complete(napi);
 	edma_reg_write(EDMA_REG_RXFILL_INT_MASK(rxfill_ring->ring_id),
