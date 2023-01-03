@@ -121,6 +121,8 @@ struct nss_dp_hal_gmac_stats {
 	uint64_t tx_tso_drop_packets;	/**< Number of TX TCP segmentation dropped packets */
 	uint64_t tx_gso_packets;	/**< Number of TX SW GSO packets */
 	uint64_t tx_gso_drop_packets;	/**< Number of TX SW GSO dropped packets */
+	uint64_t tx_queue_stopped[NR_CPUS];
+			/**< Number of times Queue got stopped */
 };
 
 /**

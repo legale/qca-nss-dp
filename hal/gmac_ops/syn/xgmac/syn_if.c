@@ -59,6 +59,10 @@ static const struct syn_ethtool_stats syn_gstrings_stats[] = {
 	{"tx_tso_drop_packets", SYN_STAT(tx_tso_drop_packets)},
 	{"tx_gso_packets", SYN_STAT(tx_gso_packets)},
 	{"tx_gso_drop_packets", SYN_STAT(tx_gso_drop_packets)},
+	{"tx_queue_stopped_cpu0", SYN_STAT(tx_queue_stopped[0])},
+	{"tx_queue_stopped_cpu1", SYN_STAT(tx_queue_stopped[1])},
+	{"tx_queue_stopped_cpu2", SYN_STAT(tx_queue_stopped[2])},
+	{"tx_queue_stopped_cpu3", SYN_STAT(tx_queue_stopped[3])},
 #endif
 };
 

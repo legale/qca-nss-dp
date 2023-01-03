@@ -167,6 +167,7 @@ struct edma_tx_stats {
 	uint64_t tx_tso_drop_pkts;
 	uint64_t tx_gso_pkts;
 	uint64_t tx_gso_drop_pkts;
+	uint64_t tx_queue_stopped[NR_CPUS];
 	struct u64_stats_sync syncp;
 };
 

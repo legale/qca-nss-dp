@@ -148,6 +148,7 @@ static netdev_tx_t edma_dp_xmit(struct nss_dp_data_plane_ctx *dpc,
 	struct nss_dp_dev *dp_dev;
 	struct sk_buff *segs;
 	uint32_t skbq;
+	uint8_t cpu_id;
 	int ret;
 	enum edma_tx_gso result;
 
@@ -174,6 +175,24 @@ static netdev_tx_t edma_dp_xmit(struct nss_dp_data_plane_ctx *dpc,
 		 * Transmit the packet
 		 */
 		ret = edma_tx_ring_xmit(netdev, NULL, skb, txdesc_ring, stats);
+
+		/*
+		 * If return failure is due to no descriptor and if tx_requeue_stop is not enabled
+		 * then stop the queue and return status as "NETDEV_TX_BUSY".
+		 * This queue will be enabled again from EDMA tx complete.
+		 */
+		if (unlikely(ret == EDMA_TX_FAIL_NO_DESC)) {
+			if (likely(!dp_global_ctx.tx_requeue_stop)) {
+				cpu_id = smp_processor_id();
+				edma_debug("Stopping tx queue due to lack of tx descriptors\n");
+				u64_stats_update_begin(&stats->syncp);
+				++stats->tx_queue_stopped[cpu_id];
+				u64_stats_update_end(&stats->syncp);
+				netif_tx_stop_queue(netdev_get_tx_queue(netdev, skbq));
+				return NETDEV_TX_BUSY;
+			}
+		}
+
 		if (unlikely(ret != EDMA_TX_OK)) {
 			dev_kfree_skb_any(skb);
 			u64_stats_update_begin(&stats->syncp);
@@ -292,6 +311,8 @@ static void edma_dp_get_ndo_stats(struct nss_dp_data_plane_ctx *dpc,
 		stats->stats.tx_tso_drop_packets += txp.tx_tso_drop_pkts;
 		stats->stats.tx_gso_packets += txp.tx_gso_pkts;
 		stats->stats.tx_gso_drop_packets += txp.tx_gso_drop_pkts;
+		stats->stats.tx_queue_stopped[i] += txp.tx_queue_stopped[i];
+
 	}
 }
 
