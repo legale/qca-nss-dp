@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -23,6 +23,8 @@
 #include <nss_dp_arch.h>
 #include <nss_dp_api_if.h>
 #include <nss_dp_hal_if.h>
+#include <fal/fal_qos.h>
+#include <fal/fal_qm.h>
 #include "edma_rx.h"
 #include "edma_tx.h"
 #ifdef NSS_DP_PPEDS_SUPPORT

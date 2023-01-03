@@ -240,7 +240,7 @@ static int edma_ppeds_txcomp_napi_poll(struct napi_struct *napi, int budget)
 }
 
 /*
- * edma_rx_alloc_buffer()
+ * edma_ppeds_rx_alloc_buffer()
  *	Alloc Rx buffers for RxFill ring
  */
 static void edma_ppeds_rx_alloc_buffer(struct edma_rxfill_ring *rxfill_ring, int alloc_count, struct nss_dp_ppeds_rx_fill_elem *rx_fill_arr,
@@ -523,6 +523,86 @@ static void edma_ppeds_cfg_tx(struct edma_ppeds *ppeds_node)
 }
 
 /*
+ * edma_ppeds_rx_desc_ring_to_queue_mapping()
+ *	PPE-DS rx descriptor ring to queue mapping API
+ */
+static void edma_ppeds_rx_desc_ring_to_queue_mapping(struct edma_ppeds *ppeds_node)
+{
+	struct edma_rxdesc_ring *rxdesc_ring = &ppeds_node->rx_ring;
+	uint32_t num_queues = ppeds_node->ppe_num_queues;
+	uint32_t queue_id = ppeds_node->ppe_qid;
+	fal_queue_bmp_t queue_bmp = {0};
+	uint32_t word_idx, bit_idx, i;
+	sw_error_t ret;
+
+	while (num_queues) {
+		word_idx = (queue_id / (EDMA_BITS_IN_WORD - 1));
+		if (word_idx >= EDMA_RING_MAPPED_QUEUE_BM_WORD_COUNT) {
+			edma_err("Invalid word index (%d) for %d queue\n", word_idx, queue_id);
+			return;
+		}
+
+		bit_idx = (queue_id % EDMA_BITS_IN_WORD);
+		queue_bmp.bmp[word_idx] |= (1 << bit_idx);
+		num_queues--;
+		queue_id++;
+	}
+
+	ret = fal_edma_ring_queue_map_set(EDMA_SWITCH_DEV_ID, rxdesc_ring->ring_id, &queue_bmp);
+	if (ret != SW_OK) {
+		edma_err("Error in configuring Rx ring to PPE queue mapping."
+				" ret: %d, ring id: %d\n",
+				ret, rxdesc_ring->ring_id);
+		for (i = 0; i < EDMA_RING_MAPPED_QUEUE_BM_WORD_COUNT; i++) {
+			edma_err("\tPPE queue bitmap[%d]: %0x\n", i, queue_bmp.bmp[i]);
+		}
+		return;
+	}
+
+	edma_debug("Rx desc ring %d to PPE queue mapping for backpressure:\n",
+			rxdesc_ring->ring_id);
+	for (i = 0; i < EDMA_RING_MAPPED_QUEUE_BM_WORD_COUNT; i++) {
+		edma_debug("\tPPE queue bitmap[%d]: %0x\n", i, queue_bmp.bmp[i]);
+	}
+}
+
+/*
+ * edma_ppeds_rx_desc_ring_flow_control()
+ *	PPE-DS Rx descriptor ring flow control configuration API
+ */
+static void edma_ppeds_rx_desc_ring_flow_control(struct edma_rxdesc_ring *rxdesc_ring)
+{
+	uint32_t data;
+
+	data = (EDMA_PPEDS_RX_FC_XOFF_DEF & EDMA_RXDESC_FC_XOFF_THRE_MASK) <<
+			 EDMA_RXDESC_FC_XOFF_THRE_SHIFT;
+	data |= ((EDMA_PPEDS_RX_FC_XON_DEF & EDMA_RXDESC_FC_XON_THRE_MASK) <<
+			 EDMA_RXDESC_FC_XON_THRE_SHIFT);
+
+	edma_debug("Rxdesc flow control threshold value is %d for ring: %d\n",
+			data, rxdesc_ring->ring_id);
+	edma_reg_write(EDMA_REG_RXDESC_FC_THRE(rxdesc_ring->ring_id), data);
+}
+
+/*
+ * edma_ppeds_rx_fill_ring_flow_control()
+ *	PPE-DS Rx fill ring flow control configuration API
+ */
+static void edma_ppeds_rx_fill_ring_flow_control(struct edma_rxfill_ring *rxfill_ring)
+{
+	uint32_t data;
+
+	data = (EDMA_PPEDS_RX_FC_XOFF_DEF & EDMA_RXFILL_FC_XOFF_THRE_MASK) <<
+			 EDMA_RXFILL_FC_XOFF_THRE_SHIFT;
+	data |= ((EDMA_PPEDS_RX_FC_XON_DEF & EDMA_RXFILL_FC_XON_THRE_MASK) <<
+			 EDMA_RXFILL_FC_XON_THRE_SHIFT);
+
+	edma_debug("Rxfill flow control threshold value is %d for ring: %d\n",
+			data, rxfill_ring->ring_id);
+	edma_reg_write(EDMA_REG_RXFILL_FC_THRE(rxfill_ring->ring_id), data);
+}
+
+/*
  * edma_ppeds_cfg_rx()
  *	API to configure PPE-DS EDMA Rx ring
  */
@@ -563,6 +643,13 @@ static void edma_ppeds_cfg_rx(struct edma_ppeds *ppeds_node)
 	 * Enable ring. Set ret mode to 'opaque'.
 	 */
 	edma_reg_write(EDMA_REG_RX_INT_CTRL(rxdesc_ring->ring_id), EDMA_RX_NE_INT_EN);
+
+	/*
+	 * Configure flow control and Rx ring to queue mapping
+	 */
+	edma_ppeds_rx_desc_ring_to_queue_mapping(ppeds_node);
+	edma_ppeds_rx_desc_ring_flow_control(rxdesc_ring);
+	edma_ppeds_rx_fill_ring_flow_control(rxfill_ring);
 }
 
 /*

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -22,6 +22,18 @@
 #define EDMA_PPEDS_MAX_NODES	3	/* Maximum number of supported PPE-DS nodes */
 #define EDMA_PPEDS_RX_WEIGHT	1	/* PPE-DS Rx processing budget */
 #define EDMA_PPEDS_RXFILL_WEIGHT	128	/* PPE-DS Rxfill processing budget */
+
+/*
+ * Rx rings flow control threshold values
+ *
+ * The Rx flow control has the X-OFF and the X-ON threshold values.
+ * Whenever the free Rx ring descriptor count falls below the X-OFF value, the
+ * ring level flow control will kick in and the mapped PPE queues will be backpressured.
+ * Similarly, whenever the free Rx ring descriptor count crosses the X-ON value,
+ * the ring level flow control will be disabled.
+ */
+#define EDMA_PPEDS_RX_FC_XOFF_DEF	32
+#define EDMA_PPEDS_RX_FC_XON_DEF	64
 
 /*
  * EDMA PPE-DS node entry index definitions
