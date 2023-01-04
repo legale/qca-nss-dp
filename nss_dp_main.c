@@ -58,7 +58,7 @@ module_param(overwrite_mode, int, 0);
 MODULE_PARM_DESC(overwrite_mode, "overwrite default page_mode setting");
 
 int jumbo_mru;
-module_param(jumbo_mru, int, 0);
+module_param(jumbo_mru, int, 0640);
 MODULE_PARM_DESC(jumbo_mru, "jumbo mode");
 
 int tx_requeue_stop;

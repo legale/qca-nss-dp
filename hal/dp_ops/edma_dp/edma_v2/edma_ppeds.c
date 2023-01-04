@@ -620,6 +620,8 @@ static void edma_ppeds_enable_rx_reap_intr(nss_dp_ppeds_handle_t *ppeds_handle)
 bool edma_ppeds_inst_register(nss_dp_ppeds_handle_t *ppeds_handle)
 {
 	int ret;
+	uint32_t alloc_size;
+	struct edma_gbl_ctx *egc = &edma_gbl_ctx;
 	struct edma_ppeds_drv *drv = &edma_gbl_ctx.ppeds_drv;
 	struct edma_ppeds *ppeds_node = container_of(ppeds_handle, struct edma_ppeds, ppeds_handle);
 	struct edma_ppeds_node_cfg *node_cfg = &(drv->ppeds_node_cfg[ppeds_node->db_idx]);
@@ -636,8 +638,13 @@ bool edma_ppeds_inst_register(nss_dp_ppeds_handle_t *ppeds_handle)
 	node_cfg->node_state = EDMA_PPEDS_NODE_STATE_REG_IN_PROG;
 	write_unlock_bh(&drv->lock);
 
+	if (egc->rx_jumbo_mru)
+		alloc_size = egc->rx_jumbo_mru;
+	else
+		alloc_size = NSS_DP_RX_BUFFER_SIZE;
+
 	ppeds_node->rxfill_ring.count = rx_ring_size;
-	ppeds_node->rxfill_ring.alloc_size  = NSS_DP_RX_BUFFER_SIZE;
+	ppeds_node->rxfill_ring.alloc_size  = alloc_size;
 	ppeds_node->rx_ring.count = rx_ring_size;
 	ppeds_node->rx_ring.pdma = (dma_addr_t)ppeds_handle->ppe2tcl_ba;
 
