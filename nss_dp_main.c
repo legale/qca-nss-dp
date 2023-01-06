@@ -61,8 +61,8 @@ int jumbo_mru;
 module_param(jumbo_mru, int, 0640);
 MODULE_PARM_DESC(jumbo_mru, "jumbo mode");
 
-int tx_requeue_stop;
-module_param(tx_requeue_stop, int, 0);
+int tx_requeue_stop = 1;
+module_param(tx_requeue_stop, int, 0640);
 MODULE_PARM_DESC(tx_requeue_stop, "disable tx requeue function");
 
 int nss_dp_rx_napi_budget = NSS_DP_HAL_RX_NAPI_BUDGET;
