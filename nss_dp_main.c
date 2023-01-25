@@ -543,6 +543,7 @@ static netdev_features_t __attribute__((unused)) nss_dp_feature_check(struct sk_
 									struct net_device *dev,
 									netdev_features_t features)
 {
+#ifdef NSS_DP_IPQ50XX
 	/*
 	 * IPQ50XX does not support HW checksum of double vlan tagged packets.
 	 * Disable the feature at runtime during feature check.
@@ -550,7 +551,7 @@ static netdev_features_t __attribute__((unused)) nss_dp_feature_check(struct sk_
 	if (skb_vlan_tagged_multi(skb)) {
 		features &= ~(NETIF_F_HW_CSUM | NETIF_F_TSO | NETIF_F_TSO6);
 	}
-
+#endif
 	return features;
 }
 
@@ -573,9 +574,9 @@ struct net_device_ops nss_dp_netdev_ops = {
 	.ndo_bridge_dellink = switchdev_port_bridge_dellink,
 #endif
 
-#ifdef NSS_DP_IPQ50XX
 	.ndo_features_check = nss_dp_feature_check,
-#else
+
+#ifndef NSS_DP_IPQ50XX
 	.ndo_select_queue = nss_dp_select_queue,
 #endif
 
