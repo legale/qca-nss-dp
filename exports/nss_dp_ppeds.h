@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -45,6 +45,8 @@ typedef struct nss_dp_ppeds_handle {
 	dma_addr_t reo2ppe_ba;		/**< REO2PPE ring's base address */
 	uint32_t ppe2tcl_num_desc;	/**< PPE2TCL descriptor count */
 	uint32_t reo2ppe_num_desc;	/**< REO2PPE descriptor count */
+	uint32_t ppe2tcl_rxfill_num_desc;	/**< PPE2TCL Rxfill descriptor count */
+	uint32_t reo2ppe_txcmpl_num_desc;	/**< REO2PPE Txcomplete descriptor count */
 	uint32_t eth_rxfill_low_thr;	/**< RxFill ring's low threshold interrupt value */
 	uint32_t eth_txcomp_budget;	/**< Tx complete's budget */
 	struct nss_dp_ppeds_rx_fill_elem *rx_fill_arr;	/**< RxFill buffer array */
