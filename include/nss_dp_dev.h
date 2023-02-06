@@ -121,8 +121,6 @@ enum nss_dp_priv_flags_bit_no {
 	NSS_DP_MIRR_EG_FLG_BIT,
 	NSS_DP_MIRR_ANALYSIS_IN_FLG_BIT,
 	NSS_DP_MIRR_ANALYSIS_EG_FLG_BIT,
-	NSS_DP_FLUSH_FDB_BY_PORT,
-	NSS_DP_FLUSH_ALL_FDB,
 	NSS_DP_MAX_ETHTOOL_PRIV_FLAGS,
 };
 
@@ -141,12 +139,6 @@ enum nss_dp_priv_flags_bit_no {
 /* Analysis mirror egress priv flag bit */
 #define NSS_DP_MIRR_ANALYSIS_EG_ENABLE	(1 << NSS_DP_MIRR_ANALYSIS_EG_FLG_BIT)
 
-/* Flush FDB by port priv flag */
-#define NSS_DP_FLUSH_FDB_BY_PORT_ENABLE	(1 << NSS_DP_FLUSH_FDB_BY_PORT)
-
-/* Flush all FDB entries priv flag bit */
-#define NSS_DP_FLUSH_ALL_FDB_ENABLE	(1 << NSS_DP_FLUSH_ALL_FDB)
-
 /*
  * nss-dp ethtool private flags
  */
@@ -155,8 +147,6 @@ static const char nss_dp_priv_flg_str[][ETH_GSTRING_LEN] = {
 	"Mirror-set-egress",
 	"Mirror-set-analysis-ingress",
 	"Mirror-set-analysis-egress",
-	"Flush-fdb-by-port",
-	"Flush-fdb-all",
 };
 
 /**
