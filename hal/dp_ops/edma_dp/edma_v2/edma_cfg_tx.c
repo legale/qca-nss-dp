@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -54,8 +54,8 @@ static void edma_cfg_tx_cmpl_ring_cleanup(struct edma_gbl_ctx *egc,
  */
 static int edma_cfg_tx_cmpl_ring_setup(struct edma_txcmpl_ring *txcmpl_ring)
 {
-	txcmpl_ring->desc = kmalloc((sizeof(struct edma_txcmpl_desc) *  txcmpl_ring->count) +
-				SMP_CACHE_BYTES,  GFP_KERNEL | __GFP_ZERO);
+	txcmpl_ring->desc = kmalloc(roundup((sizeof(struct edma_txcmpl_desc) * txcmpl_ring->count),
+						SMP_CACHE_BYTES), GFP_KERNEL | __GFP_ZERO);
 	if (!txcmpl_ring->desc) {
 		edma_err("Descriptor alloc for TXCMPL ring %u failed\n",
 				txcmpl_ring->id);
@@ -125,8 +125,8 @@ static int edma_cfg_tx_desc_ring_setup(struct edma_txdesc_ring *txdesc_ring)
 	/*
 	 * Allocate Tx ring descriptors
 	 */
-	txdesc_ring->pdesc = kmalloc((sizeof(struct edma_pri_txdesc) *  txdesc_ring->count) +
-				SMP_CACHE_BYTES,  GFP_KERNEL | __GFP_ZERO);
+	txdesc_ring->pdesc = kmalloc(roundup((sizeof(struct edma_pri_txdesc) * txdesc_ring->count),
+						SMP_CACHE_BYTES), GFP_KERNEL | __GFP_ZERO);
 	if (!txdesc_ring->pdesc) {
 		edma_err("Descriptor alloc for TXDESC ring %u failed\n",
 				txdesc_ring->id);
@@ -138,8 +138,8 @@ static int edma_cfg_tx_desc_ring_setup(struct edma_txdesc_ring *txdesc_ring)
 	/*
 	 * Allocate sencondary Tx ring descriptors
 	 */
-	txdesc_ring->sdesc = kmalloc((sizeof(struct edma_sec_txdesc) *  txdesc_ring->count) +
-				SMP_CACHE_BYTES,  GFP_KERNEL | __GFP_ZERO);
+	txdesc_ring->sdesc = kmalloc(roundup((sizeof(struct edma_sec_txdesc) * txdesc_ring->count),
+						SMP_CACHE_BYTES), GFP_KERNEL | __GFP_ZERO);
 	if (!txdesc_ring->sdesc) {
 		edma_err("Descriptor alloc for secondary TXDESC ring %u failed\n",
 				txdesc_ring->id);
