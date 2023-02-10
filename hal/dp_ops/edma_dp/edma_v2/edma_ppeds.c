@@ -24,6 +24,10 @@
 static char edma_ppeds_txcmpl_irq_name[EDMA_PPEDS_MAX_NODES][EDMA_IRQ_NAME_SIZE];
 static char edma_ppeds_rxdesc_irq_name[EDMA_PPEDS_MAX_NODES][EDMA_IRQ_NAME_SIZE];
 static char edma_ppeds_rxfill_irq_name[EDMA_PPEDS_MAX_NODES][EDMA_IRQ_NAME_SIZE];
+static void *edma_ppeds_tx_ring_sec_mem;
+static void *edma_ppeds_rx_ring_sec_mem;
+static int edma_ppeds_rx_ring_entries;
+static int edma_ppeds_tx_ring_entries;
 
 /*
  * edma_ppeds_rx_fill_ring_alloc()
@@ -68,11 +72,24 @@ static void edma_ppeds_rx_fill_ring_free(struct edma_rxfill_ring *rxfill_ring)
  */
 static int edma_ppeds_rx_secondary_alloc(struct edma_rxdesc_ring *rxdesc_ring)
 {
-	/*
-	 * Allocate secondary RxDesc ring descriptors
-	 */
-	rxdesc_ring->sdesc = kmalloc((sizeof(struct edma_rxdesc_sec_desc) *  rxdesc_ring->count) +
-			SMP_CACHE_BYTES,  GFP_KERNEL | __GFP_ZERO);
+	if (edma_ppeds_rx_ring_sec_mem) {
+		rxdesc_ring->sdesc = edma_ppeds_rx_ring_sec_mem;
+		if (edma_ppeds_rx_ring_entries < rxdesc_ring->count) {
+			edma_err("Num of descs needed (%d) for Rx secondary ring are more than available (%d)",
+					rxdesc_ring->count, edma_ppeds_rx_ring_entries);
+			BUG();
+		}
+	} else {
+		/*
+		 * Allocate secondary RxDesc ring descriptors
+		 */
+		rxdesc_ring->sdesc = kmalloc((sizeof(struct edma_rxdesc_sec_desc) *  rxdesc_ring->count) +
+				SMP_CACHE_BYTES,  GFP_KERNEL | __GFP_ZERO);
+
+		edma_ppeds_rx_ring_sec_mem = rxdesc_ring->sdesc;
+		edma_ppeds_rx_ring_entries = rxdesc_ring->count;
+	}
+
 	if (!rxdesc_ring->sdesc) {
 		edma_err("Descriptor alloc for secondary RX ring %u failed\n",
 				rxdesc_ring->ring_id);
@@ -81,17 +98,6 @@ static int edma_ppeds_rx_secondary_alloc(struct edma_rxdesc_ring *rxdesc_ring)
 
 	rxdesc_ring->sdma = (dma_addr_t)virt_to_phys(rxdesc_ring->sdesc);
 	return 0;
-}
-
-/*
- * edma_ppeds_rx_secondary_free()
- *	API to free secondary Rx ring for PPE-DS node
- */
-static void edma_ppeds_rx_secondary_free(struct edma_rxdesc_ring *rxdesc_ring)
-{
-	kfree(rxdesc_ring->sdesc);
-	rxdesc_ring->sdesc = NULL;
-	rxdesc_ring->sdma = (dma_addr_t)0;
 }
 
 /*
@@ -131,11 +137,23 @@ static void edma_ppeds_tx_cmpl_ring_free(struct edma_txcmpl_ring *txcmpl_ring)
  */
 static int edma_ppeds_tx_secondary_alloc(struct edma_txdesc_ring *txdesc_ring)
 {
-	/*
-	 * Allocate sencondary Tx ring descriptors
-	 */
-	txdesc_ring->sdesc = kmalloc((sizeof(struct edma_sec_txdesc) *  txdesc_ring->count) +
-			SMP_CACHE_BYTES, GFP_KERNEL | __GFP_ZERO);
+	if (edma_ppeds_tx_ring_sec_mem) {
+		txdesc_ring->sdesc = edma_ppeds_tx_ring_sec_mem;
+		if (edma_ppeds_tx_ring_entries < txdesc_ring->count) {
+			edma_err("Num of descs needed (%d) for Tx secondary ring are more than available (%d)",
+					txdesc_ring->count, edma_ppeds_tx_ring_entries);
+			BUG();
+		}
+	} else {
+		/*
+		 * Allocate sencondary Tx ring descriptors
+		 */
+		txdesc_ring->sdesc = kmalloc((sizeof(struct edma_sec_txdesc) *  txdesc_ring->count) +
+				SMP_CACHE_BYTES, GFP_KERNEL | __GFP_ZERO);
+
+		edma_ppeds_tx_ring_sec_mem = txdesc_ring->sdesc;
+		edma_ppeds_tx_ring_entries = txdesc_ring->count;
+	}
 	if (!txdesc_ring->sdesc) {
 		edma_err("Descriptor alloc for secondary TX ring %u failed\n",
 				txdesc_ring->id);
@@ -144,18 +162,6 @@ static int edma_ppeds_tx_secondary_alloc(struct edma_txdesc_ring *txdesc_ring)
 
 	txdesc_ring->sdma = (dma_addr_t)virt_to_phys(txdesc_ring->sdesc);
 	edma_debug("tx sec desc got allocated for Tx ring %d\n", txdesc_ring->id);
-	return 0;
-}
-
-/*
- * edma_ppeds_tx_secondary_free()
- *	API to free secondary Tx ring for PPE-DS node
- */
-static int edma_ppeds_tx_secondary_free(struct edma_txdesc_ring *txdesc_ring)
-{
-	kfree(txdesc_ring->sdesc);
-	txdesc_ring->sdesc = NULL;
-	txdesc_ring->sdma = (dma_addr_t)0;
 	return 0;
 }
 
@@ -794,7 +800,6 @@ bool edma_ppeds_inst_register(nss_dp_ppeds_handle_t *ppeds_handle)
 	return true;
 
 tx_sec_setup_failed:
-	edma_ppeds_rx_secondary_free(&ppeds_node->rx_ring);
 rx_sec_setup_failed:
 	irq_clear_status_flags(ppeds_node->rxfill_intr, IRQ_DISABLE_UNLAZY);
 	synchronize_irq(ppeds_node->rxfill_intr);
@@ -1141,8 +1146,6 @@ void edma_ppeds_inst_free(nss_dp_ppeds_handle_t *ppeds_handle)
 	netif_napi_del(&ppeds_node->rxfill_ring.napi);
 
 	edma_ppeds_rx_fill_ring_free(&ppeds_node->rxfill_ring);
-	edma_ppeds_rx_secondary_free(&ppeds_node->rx_ring);
-	edma_ppeds_tx_secondary_free(&ppeds_node->tx_ring);
 	edma_ppeds_tx_cmpl_ring_free(&ppeds_node->txcmpl_ring);
 
 	kfree(ppeds_node);
@@ -1232,6 +1235,16 @@ nss_dp_ppeds_handle_t *edma_ppeds_inst_alloc(const struct nss_dp_ppeds_cb *ops, 
 void edma_ppeds_deinit(struct edma_ppeds_drv *drv)
 {
 	uint32_t i;
+
+	if (edma_ppeds_tx_ring_sec_mem) {
+		kfree(edma_ppeds_tx_ring_sec_mem);
+		edma_ppeds_tx_ring_sec_mem = NULL;
+	}
+
+	if (edma_ppeds_rx_ring_sec_mem) {
+		kfree(edma_ppeds_rx_ring_sec_mem);
+		edma_ppeds_rx_ring_sec_mem = NULL;
+	}
 
 	for (i = 0; i < EDMA_PPEDS_MAX_NODES; i++) {
 		drv->ppeds_node_cfg[i].ppeds_db = NULL;
