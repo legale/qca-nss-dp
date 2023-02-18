@@ -62,6 +62,21 @@ static int nss_dp_set_analysis_port(struct net_device *dev, u32 flags,
 	struct nss_dp_dev *dp_priv = (struct nss_dp_dev *)netdev_priv(dev);
 	struct ppe_drv_iface *iface = ppe_drv_iface_get_by_dev(dev);
 
+	if (dp_priv->ethtool_priv_flags & NSS_DP_MIRR_IN_ENABLE ||
+			dp_priv->ethtool_priv_flags & NSS_DP_MIRR_EG_ENABLE) {
+		/*
+		 * If current port is already set for ingress/egress mirror then user
+		 * can not set current port to mirror analysis port
+		 */
+		netdev_info(dev, "Port %s is set for %s mirror port, So can not set port to %s\n",
+			   dev->name,
+			   (dp_priv->ethtool_priv_flags & NSS_DP_MIRR_IN_ENABLE ?
+				"Ingress" : "Egress"),
+			   (mirr_analysis_dir == PPE_DRV_DP_MIRR_DI_IN ?
+				"ingress mirror analysis" : "egress mirror analysis"));
+		return -EINVAL;
+	}
+
 	switch (mirr_analysis_dir) {
 	/*
 	 * Set ingress mirror analysis port
@@ -89,7 +104,7 @@ static int nss_dp_set_analysis_port(struct net_device *dev, u32 flags,
 				(flags & NSS_DP_MIRR_ANALYSIS_IN_ENABLE),
 				PPE_DRV_MIRR_ANALYSIS_PRI);
 		if (err != PPE_DRV_RET_SUCCESS) {
-			pr_info("Failed to set %s mirror port analysis for %s\n",
+			netdev_info(dev, "Failed to set %s mirror port analysis for %s\n",
 					(flags & NSS_DP_MIRR_ANALYSIS_IN_ENABLE ?
 					 "enable" : "disable"),
 					dev->name);
@@ -132,7 +147,7 @@ static int nss_dp_set_analysis_port(struct net_device *dev, u32 flags,
 				(flags & NSS_DP_MIRR_ANALYSIS_EG_ENABLE),
 				PPE_DRV_MIRR_ANALYSIS_PRI);
 		if (err != PPE_DRV_RET_SUCCESS) {
-			pr_info("Failed to set %s mirror port analysis for %s\n",
+			netdev_info(dev, "Failed to set %s mirror port analysis for %s\n",
 					(flags & NSS_DP_MIRR_ANALYSIS_EG_ENABLE ?
 					 "enable" : "disable"),
 					dev->name);
@@ -167,7 +182,7 @@ int __nss_dp_set_priv_flags(struct net_device *dev, u32 flags)
 
 	iface = ppe_drv_iface_get_by_dev(dev);
 	if (!iface) {
-		pr_info("Failed to get iface for interface %s\n", dev->name);
+		netdev_info(dev, "Failed to get iface for interface %s\n", dev->name);
 		return -EIO;
 	}
 
@@ -182,10 +197,20 @@ int __nss_dp_set_priv_flags(struct net_device *dev, u32 flags)
 		/*
 		 * Set ingress mirror interface
 		 */
+		if (dp_priv->ethtool_priv_flags & NSS_DP_MIRR_ANALYSIS_IN_ENABLE ||
+				dp_priv->ethtool_priv_flags & NSS_DP_MIRR_ANALYSIS_EG_ENABLE) {
+			/*
+			 * If current port is already set for ingress/egress mirror analysis
+			 * then user can not set current port to mirror port
+			 */
+			netdev_info(dev, "Port %s is set for imirror analysis port, can not set ingress mirror port\n",
+					dev->name);
+			return -EINVAL;
+		}
 		err = ppe_drv_dp_set_mirror_if(iface, PPE_DRV_DP_MIRR_DI_IN,
 				(NSS_DP_MIRR_IN_ENABLE & flags));
 		if (err != PPE_DRV_RET_SUCCESS) {
-			pr_info("Failed to set ingress mirror to %s\n",
+			netdev_info(dev, "Failed to set ingress mirror to %s\n",
 					(NSS_DP_MIRR_IN_ENABLE & flags ? "enable" : "disable"));
 			return -EIO;
 		}
@@ -201,10 +226,21 @@ int __nss_dp_set_priv_flags(struct net_device *dev, u32 flags)
 		/*
 		 * Set egress mirror interface
 		 */
+		if (dp_priv->ethtool_priv_flags & NSS_DP_MIRR_ANALYSIS_IN_ENABLE ||
+				dp_priv->ethtool_priv_flags & NSS_DP_MIRR_ANALYSIS_EG_ENABLE) {
+			/*
+			 * If current port is already set for ingress/egress mirror analysis
+			 * then user can not set current port to mirror port
+			 */
+			netdev_info(dev, "Port %s is set for imirror analysis port, can not set egress mirror port\n",
+					dev->name);
+			return -EINVAL;
+		}
+
 		err = ppe_drv_dp_set_mirror_if(iface, PPE_DRV_DP_MIRR_DI_EG,
 				(NSS_DP_MIRR_EG_ENABLE & flags));
 		if (err != PPE_DRV_RET_SUCCESS) {
-			pr_info("Failed to set egress mirror to %s\n",
+			netdev_info(dev, "Failed to set egress mirror to %s\n",
 					(NSS_DP_MIRR_EG_ENABLE & flags ? "enable" : "disable"));
 			return -EIO;
 		}
@@ -227,29 +263,6 @@ int __nss_dp_set_priv_flags(struct net_device *dev, u32 flags)
 		 * Set egress mirror analysis port
 		 */
 		return nss_dp_set_analysis_port(dev, flags, PPE_DRV_DP_MIRR_DI_EG);
-
-	case NSS_DP_FLUSH_FDB_BY_PORT_ENABLE:
-		/*
-		 * Flush all FDB from port
-		 */
-		err = ppe_drv_br_flush_fdb(iface, false, true);
-		if (err != PPE_DRV_RET_SUCCESS) {
-			pr_info("Failed to flush FDB for port %u with err_no %d\n",
-					dp_priv->macid, err);
-			return -EIO;
-		}
-		break;
-
-	case NSS_DP_FLUSH_ALL_FDB_ENABLE:
-		/*
-		 * Flush all FDB from all port
-		 */
-		err = ppe_drv_br_flush_fdb(iface, false, false);
-		if (err != PPE_DRV_RET_SUCCESS) {
-			pr_info("Failed to flush FDB with err_no %d\n", err);
-			return -EIO;
-		}
-		break;
 
 	default:
 		return -EOPNOTSUPP;
