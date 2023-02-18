@@ -1031,6 +1031,32 @@ uint16_t edma_ppeds_get_tx_cons_idx(nss_dp_ppeds_handle_t *ppeds_handle)
 }
 
 /*
+ * edma_ppeds_get_rxfill_cons_idx()
+ *	Get rxfill ring consumer index
+ */
+static uint16_t edma_ppeds_get_rxfill_cons_idx(nss_dp_ppeds_handle_t *ppeds_handle)
+{
+	struct edma_ppeds *ppeds_node = container_of(ppeds_handle, struct edma_ppeds, ppeds_handle);
+	struct edma_rxfill_ring *rxfill_ring = &ppeds_node->rxfill_ring;
+
+	return edma_reg_read(EDMA_REG_RXFILL_CONS_IDX(rxfill_ring->ring_id)) &
+				EDMA_RXFILL_CONS_IDX_MASK;
+}
+
+/*
+ * edma_ppeds_set_rxfill_prod_idx()
+ *	Set rxfill ring producer index
+ */
+static void edma_ppeds_set_rxfill_prod_idx(nss_dp_ppeds_handle_t *ppeds_handle,
+					   uint16_t prod_idx)
+{
+	struct edma_ppeds *ppeds_node = container_of(ppeds_handle, struct edma_ppeds, ppeds_handle);
+	struct edma_rxfill_ring *rxfill_ring = &ppeds_node->rxfill_ring;
+
+	edma_reg_write(EDMA_REG_RXFILL_PROD_IDX(rxfill_ring->ring_id), prod_idx);
+}
+
+/*
  * edma_ppeds_inst_start()
  *	PPE-DS EDMA instance start API
  */
@@ -1395,5 +1421,7 @@ struct nss_dp_ppeds_ops edma_ppeds_ops = {
 	.set_tx_prod_idx	=	edma_ppeds_set_tx_prod_idx,
 	.get_tx_cons_idx	=	edma_ppeds_get_tx_cons_idx,
 	.get_rx_prod_idx	=	edma_ppeds_get_rx_prod_idx,
+	.get_rxfill_cons_idx	=	edma_ppeds_get_rxfill_cons_idx,
+	.set_rxfill_prod_idx	=	edma_ppeds_set_rxfill_prod_idx,
 	.enable_rx_reap_intr	=	edma_ppeds_enable_rx_reap_intr,
 };

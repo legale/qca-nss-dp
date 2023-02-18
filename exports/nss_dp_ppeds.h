@@ -99,6 +99,10 @@ struct nss_dp_ppeds_ops {
 				/**< PPE-DS Tx consumer index get operation */
 	uint16_t (*get_rx_prod_idx)(nss_dp_ppeds_handle_t *ppeds_handle);
 				/**< PPE-DS Rx producer index get operation */
+	uint16_t (*get_rxfill_cons_idx)(nss_dp_ppeds_handle_t *ppeds_handle);
+				/**< PPE-DS Get rxfill ring consumer index */
+	void (*set_rxfill_prod_idx)(nss_dp_ppeds_handle_t *ppeds_handle, uint16_t prod_idx);
+				/**< PPE-DS Set rxfill ring producer index */
 	void (*enable_rx_reap_intr)(nss_dp_ppeds_handle_t *ppeds_handle);
 				/**< PPE-DS enable edma interrupt */
 };
