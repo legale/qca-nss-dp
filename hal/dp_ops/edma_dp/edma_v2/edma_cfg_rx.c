@@ -444,18 +444,25 @@ static int32_t edma_cfg_rx_desc_point_offload_ring_reset_queue_config(struct edm
  * edma_cfg_rx_desc_point_offload_ring_to_queue_mapping()
  *	API to map Rx descriptor rings to PPE queue for backpressure
  */
-static void edma_cfg_rx_desc_point_offload_ring_to_queue_mapping(struct edma_gbl_ctx *egc, uint32_t enable)
+static void edma_cfg_rx_desc_point_offload_ring_to_queue_mapping(struct edma_gbl_ctx *egc)
 {
-	uint32_t i = egc->rxdesc_point_offload_ring;
 	sw_error_t ret;
 	fal_queue_bmp_t queue_bmp = {0};
+	unsigned int pri_idx = 0;
+	uint32_t word_idx = 0;
+	uint32_t local_bmp[EDMA_RING_MAPPED_QUEUE_BM_WORD_COUNT] = {0};
+	unsigned int queue_id = egc->point_offload_queue;
 
 	/*
 	 * Rxdesc ring to PPE queue mapping
 	 */
-	if (enable) {
-		memcpy(queue_bmp.bmp, edma_gbl_ctx.rxdesc_ring_to_queue_bm[i], sizeof(uint32_t) * EDMA_RING_MAPPED_QUEUE_BM_WORD_COUNT);
+	for (pri_idx = 0; pri_idx < EDMA_MAX_PRI_PER_CORE; pri_idx++, queue_id++) {
+		word_idx = (queue_id / EDMA_BITS_IN_WORD);
+		local_bmp[word_idx] |= 1 << queue_id;
+		edma_debug("Queue_id: %d, word_idx: %d\n", queue_id, word_idx);
 	}
+
+	memcpy(queue_bmp.bmp, local_bmp, sizeof(uint32_t) * EDMA_RING_MAPPED_QUEUE_BM_WORD_COUNT);
 
 	ret = fal_edma_ring_queue_map_set(0, egc->rxdesc_point_offload_ring, &queue_bmp);
 	if (ret != SW_OK) {
@@ -1247,7 +1254,7 @@ void edma_cfg_rx_point_offload_rings(struct edma_gbl_ctx *egc)
 		 */
 		edma_cfg_rx_desc_point_offload_ring_flow_control(egc, nss_dp_rx_fc_xoff, nss_dp_rx_fc_xon);
 		edma_cfg_rx_fill_point_offload_ring_flow_control(egc, nss_dp_rx_fc_xoff, nss_dp_rx_fc_xon);
-		edma_cfg_rx_desc_point_offload_ring_to_queue_mapping(egc, edma_cfg_rx_fc_enable);
+		edma_cfg_rx_desc_point_offload_ring_to_queue_mapping(egc);
 	}
 }
 #endif
