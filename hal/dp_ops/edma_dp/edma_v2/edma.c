@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -28,7 +28,6 @@
 #include <fal/fal_rss_hash.h>
 #include <fal/fal_servcode.h>
 #include <ppe_drv_sc.h>
-#include <ppe_drv.h>
 #include <linux/clk.h>
 #include "edma.h"
 #include "edma_cfg_tx.h"
@@ -63,25 +62,25 @@ EXPORT_SYMBOL(nss_dp_point_offload_info_get);
 #endif
 
 /*
- * edma_nsm_sc_stats_read()
- *	Read stats for NSM for a given service code.
+ * edma_nsm_sawf_sc_stats_read()
+ *	Read stats for NSM for a given service class.
  */
-bool edma_nsm_sc_stats_read(struct nss_dp_hal_nsm_sc_stats *nsm_stats, uint8_t service_class)
+bool edma_nsm_sawf_sc_stats_read(struct nss_dp_hal_nsm_sawf_sc_stats *nsm_stats, uint8_t service_class)
 {
-	uint8_t service_code = service_class + PPE_DRV_SC_SAWF_START;
-	struct edma_sc_stats *sc_stats = &edma_gbl_ctx.sc_stats[service_code];
+	struct edma_sawf_sc_stats *sawf_sc_stats;
 	unsigned int start;
 
-	if ((service_code < PPE_DRV_SC_SAWF_START) || (service_code > PPE_DRV_SC_SAWF_END)) {
-		edma_warn("%u Invalid SAWF service code.", service_code);
+	if (!PPE_DRV_SERVICE_CLASS_IS_VALID(service_class)) {
+		edma_warn("%u Invalid SAWF service class.", service_class);
 		return false;
 	}
 
+	sawf_sc_stats = &edma_gbl_ctx.sawf_sc_stats[service_class];
 	do {
-		start = u64_stats_fetch_begin_irq(&sc_stats->syncp);
-		nsm_stats->rx_packets = sc_stats->rx_packets;
-		nsm_stats->rx_bytes = sc_stats->rx_bytes;
-	} while (u64_stats_fetch_retry_irq(&sc_stats->syncp, start));
+		start = u64_stats_fetch_begin_irq(&sawf_sc_stats->syncp);
+		nsm_stats->rx_packets = sawf_sc_stats->rx_packets;
+		nsm_stats->rx_bytes = sawf_sc_stats->rx_bytes;
+	} while (u64_stats_fetch_retry_irq(&sawf_sc_stats->syncp, start));
 
 	return true;
 }

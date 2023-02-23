@@ -143,6 +143,59 @@
 #define EDMA_RXDESC_CPU_CODE_GET(desc)		((((desc)->word5) & 0x03FF0000) >> 16)
 
 /*
+ * Extracting Tree ID and WiFi-QoS from descriptor.
+ */
+#define EDMA_RXDESC_WIFI_QOS_MASK		0xFF000000
+#define EDMA_RXDESC_WIFI_QOS_SHIFT		0x18
+#define EDMA_RXDESC_TREE_ID_GET(desc)		(le32_to_cpu(((desc)->word2)))
+#define EDMA_RXDESC_WIFI_QOS_GET(desc)		((le32_to_cpu(((desc)->word5)) & \
+						EDMA_RXDESC_WIFI_QOS_MASK) >> \
+						EDMA_RXDESC_WIFI_QOS_SHIFT)
+
+/*
+ * Check if WiFi-QoS flag is valid.
+ */
+#define EDMA_RXDESC_WIFI_QOS_FLAG_VALID_GET(desc)	(((desc)->word1) & 0x00008000)
+
+/*
+ * Tree_id related Macros.
+ *	---------------------------------------------------------------------------------
+ *	|Tree_ID Type (4 bits) | 		Tree_ID Metadata(20 bits)		|
+ *	---------------------------------------------------------------------------------
+ */
+#define EDMA_RXDESC_TREE_ID_TYPE_SHIFT			20
+#define EDMA_RXDESC_TREE_ID_TYPE_MASK			0x00F00000
+#define EDMA_RXDESC_TREE_ID_TYPE_GET(desc)		((EDMA_RXDESC_TREE_ID_GET(desc) & EDMA_RXDESC_TREE_ID_TYPE_MASK) \
+								>> EDMA_RXDESC_TREE_ID_TYPE_SHIFT)
+/*
+ * SAWF related macros
+ */
+#define EDMA_RXDESC_SERVICE_CLASS_SHIFT			10
+#define EDMA_RXDESC_SERVICE_CLASS_MASK			0x0003FC00
+#define EDMA_RXDESC_SERVICE_CLASS_GET(desc)		((EDMA_RXDESC_TREE_ID_GET(desc) & EDMA_RXDESC_SERVICE_CLASS_MASK) \
+								>> EDMA_RXDESC_SERVICE_CLASS_SHIFT)
+#define EDMA_RXDESC_PEER_ID_MASK			0x000003FF
+#define EDMA_RXDESC_PEER_ID_GET(desc)			(EDMA_RXDESC_TREE_ID_GET(desc) & EDMA_RXDESC_PEER_ID_MASK)
+
+/*
+ * Service class TAG to be added for SAWF metadata.
+ */
+#define EDMA_RX_SAWF_SERVICE_CLASS_TAG			0xAA000000
+
+/*
+ * Construct the SAWF metadata
+ *	----------------------------------------------------------------------------
+ *	|TAG (8 bits) | service_class (8 bits) | peerid (10 bits) | MSDUQ (6 bits))|
+ *	----------------------------------------------------------------------------
+ */
+#define EDMA_RX_SAWF_METADATA_SERVICE_CLASS_SHIFT		16
+#define EDMA_RX_SAWF_METADATA_PEER_ID_SHIFT			6
+#define EDMA_RX_SAWF_METADATA_CONSTRUCT(sc, pi, msduq)		(EDMA_RX_SAWF_SERVICE_CLASS_TAG | \
+								(sc << EDMA_RX_SAWF_METADATA_SERVICE_CLASS_SHIFT) | \
+								(pi << EDMA_RX_SAWF_METADATA_PEER_ID_SHIFT) | \
+								msduq)
+
+/*
  * RX DESC size shift to obtain index from descriptor pointer
  */
 #define EDMA_RXDESC_SIZE_SHIFT		5

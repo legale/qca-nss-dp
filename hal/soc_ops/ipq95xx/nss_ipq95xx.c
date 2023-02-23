@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -23,12 +23,12 @@
 #include "nss_dp_hal.h"
 
 /*
- * nss_dp_hal_nsm_sc_stats_read()
+ * nss_dp_hal_nsm_sawf_sc_stats_read()
  *	Send nsm stats for the given service-class.
  */
-bool nss_dp_hal_nsm_sc_stats_read(struct nss_dp_hal_nsm_sc_stats *nsm_stats, uint8_t service_class)
+bool nss_dp_hal_nsm_sawf_sc_stats_read(struct nss_dp_hal_nsm_sawf_sc_stats *nsm_stats, uint8_t service_class)
 {
-	return edma_nsm_sc_stats_read(nsm_stats, service_class);
+	return edma_nsm_sawf_sc_stats_read(nsm_stats, service_class);
 }
 
 /*

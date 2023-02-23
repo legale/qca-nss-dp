@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -122,18 +122,18 @@ struct nss_dp_hal_gmac_stats {
 };
 
 /**
- * nss_dp_hal_nsm_sc_stats
+ * nss_dp_hal_nsm_sawf_sc_stats
  *	Per-service code stats to be send to NSM.
  */
-struct nss_dp_hal_nsm_sc_stats {
+struct nss_dp_hal_nsm_sawf_sc_stats {
 	uint64_t rx_packets;	/**< Packets received for a service code on the PPE queues. */
 	uint64_t rx_bytes;	/**< Bytes received for a service code on the PPE queues. */
 };
 
 extern int edma_init(void);
 extern void edma_cleanup(bool is_dp_override);
-extern bool edma_nsm_sc_stats_read(struct nss_dp_hal_nsm_sc_stats *nsm_stats, uint8_t service_class);
-extern bool nss_dp_hal_nsm_sc_stats_read(struct nss_dp_hal_nsm_sc_stats *nsm_stats, uint8_t service_class);
+extern bool edma_nsm_sawf_sc_stats_read(struct nss_dp_hal_nsm_sawf_sc_stats *nsm_stats, uint8_t service_class);
+extern bool nss_dp_hal_nsm_sawf_sc_stats_read(struct nss_dp_hal_nsm_sawf_sc_stats *nsm_stats, uint8_t service_class);
 extern int32_t nss_dp_hal_clock_set_and_enable(struct device *dev, const char *id, unsigned long rate);
 extern struct nss_dp_data_plane_ops nss_dp_edma_ops;
 extern int32_t nss_dp_hal_configure_clocks(void *ctx);

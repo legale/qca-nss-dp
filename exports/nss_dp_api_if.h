@@ -2,7 +2,7 @@
  **************************************************************************
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -272,7 +272,7 @@ uint16_t edma_cfg_rx_point_offload_ring_queue_get(void);
 void nss_dp_point_offload_info_get(uint32_t *txdesc_ring, uint32_t *txcmpl_ring, uint32_t *rxdesc_ring, uint32_t *rxfill_ring);
 
 /**
- * nss_dp_nsm_sc_stats_read
+ * nss_dp_nsm_sawf_sc_stats_read
  *	Update the stats in NSM for given service class.
  *
  * @param[in] nsm_stats		Pointer to NSM stats structure.
@@ -281,7 +281,7 @@ void nss_dp_point_offload_info_get(uint32_t *txdesc_ring, uint32_t *txcmpl_ring,
  * @return
  * Status of the API.
  */
-extern bool nss_dp_nsm_sc_stats_read(struct nss_dp_hal_nsm_sc_stats *nsm_stats, uint8_t service_class);
+extern bool nss_dp_nsm_sawf_sc_stats_read(struct nss_dp_hal_nsm_sawf_sc_stats *nsm_stats, uint8_t service_class);
 
 /**
  *@}

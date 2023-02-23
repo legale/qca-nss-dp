@@ -253,15 +253,68 @@ static inline void edma_rx_checksum_verify(struct edma_rxdesc_desc *rxdesc_desc,
 }
 
 /*
- * edma_rx_sc_stats_update()
- *	Update per service-code stats.
+ * edma_rx_sawf_sc_stats_update()
+ *	Update per service-class stats.
  */
-static inline void edma_rx_sc_stats_update(struct sk_buff *skb, struct edma_sc_stats *sc_stats)
+static inline void edma_rx_sawf_sc_stats_update(uint64_t pkt_length, struct edma_sawf_sc_stats *sawf_sc_stats)
 {
-	u64_stats_update_begin(&sc_stats->syncp);
-	sc_stats->rx_bytes += skb->len;
-	sc_stats->rx_packets++;
-	u64_stats_update_end(&sc_stats->syncp);
+	u64_stats_update_begin(&sawf_sc_stats->syncp);
+	sawf_sc_stats->rx_bytes += pkt_length;
+	sawf_sc_stats->rx_packets++;
+	u64_stats_update_end(&sawf_sc_stats->syncp);
+}
+
+/*
+ * edma_rx_handle_wifi_qos_packets()
+ *	Handle packets with wifi qos enabled.
+ */
+static void edma_rx_handle_wifi_qos_packets(struct edma_gbl_ctx *egc, struct edma_rxdesc_ring *rxdesc_ring, struct edma_rxdesc_desc *rxdesc_head, struct sk_buff *skb)
+{
+	uint16_t desc_index, peer_id;
+	uint8_t service_class, wifi_qos;
+	struct edma_rxdesc_sec_desc *rxdesc_sec;
+	ppe_drv_tree_id_type_t tree_id_type;
+
+	desc_index = ((uint8_t *)rxdesc_head - (uint8_t *)rxdesc_ring->pdesc) >> EDMA_RXDESC_SIZE_SHIFT;
+	rxdesc_sec = EDMA_RXDESC_SEC_DESC(rxdesc_ring, desc_index);
+
+	/*
+	 * Invalidate the secondary descriptor before using its fields.
+	 */
+	dmac_inv_range((void *)rxdesc_sec, (void *)(rxdesc_sec + 1));
+
+	tree_id_type = EDMA_RXDESC_TREE_ID_TYPE_GET(rxdesc_sec);
+
+	switch (tree_id_type) {
+	case PPE_DRV_TREE_ID_TYPE_NONE:
+		/*
+		 * TODO: Get the remaining 20-bit tree_id and process.
+		 */
+		break;
+	case PPE_DRV_TREE_ID_TYPE_SAWF:
+		/*
+		 * In case of SAWF, fetch the SAWF metadata from Tree ID.
+		 */
+		service_class = EDMA_RXDESC_SERVICE_CLASS_GET(rxdesc_sec);
+		peer_id = EDMA_RXDESC_PEER_ID_GET(rxdesc_sec);
+		wifi_qos = EDMA_RXDESC_WIFI_QOS_GET(rxdesc_head);
+
+		/*
+		 * Update stats for the SAWF service class.
+		 */
+		edma_rx_sawf_sc_stats_update(skb->len, &egc->sawf_sc_stats[service_class]);
+
+		/*
+		 * Configure skb->mark with SAWF metadata.
+		 */
+		skb->mark = EDMA_RX_SAWF_METADATA_CONSTRUCT(service_class, peer_id, wifi_qos);
+
+		edma_debug("%px : SAWF mark configured = 0x%x\n", egc, sawf->mark);
+		break;
+	default:
+		edma_debug("%p : Invalid tree-id type = %u\n", egc, tree_id_type);
+		break;
+	}
 }
 
 /*
@@ -517,10 +570,9 @@ process_next_scatter:
 	edma_debug("edma_gbl_ctx:%px skb:%px Jumbo pkt_length:%u\n", egc, skb_head, skb_head->len);
 
 	/*
-	 * See if this packet is tagged with a special service code
-	 * or CPU code.
+	 * Check if primary descriptor is not NULL.
 	 */
-	if (likely(rxdesc_ring->pdesc_head) && unlikely(EDMA_RXDESC_SC_CC_VALID_GET(rxdesc_ring->pdesc_head))) {
+	if (likely(rxdesc_ring->pdesc_head)) {
 		/*
 		 * NOTE:
 		 * 1. We are combining both the checks together here to reduce
@@ -530,11 +582,19 @@ process_next_scatter:
 		 *    don't send it to stack otherwise continue with regular processing.
 		 */
 		struct edma_rxdesc_desc *pdesc_head = rxdesc_ring->pdesc_head;
-		if (edma_rx_handle_sc_cc_packets(egc, rxdesc_ring, pdesc_head, skb_head)) {
+		if (unlikely(EDMA_RXDESC_SC_CC_VALID_GET(rxdesc_ring->pdesc_head) && edma_rx_handle_sc_cc_packets(egc, rxdesc_ring, pdesc_head, skb_head))) {
 			rxdesc_ring->head = NULL;
 			rxdesc_ring->last = NULL;
 			rxdesc_ring->pdesc_head = NULL;
 			return;
+		}
+
+		/*
+		 * See if this packet is tagged with valid wifi qos.
+		 * WiFi-QoS flag needs to be set for tree_id processing.
+		 */
+		if (unlikely(EDMA_RXDESC_WIFI_QOS_FLAG_VALID_GET(rxdesc_ring->pdesc_head))) {
+			edma_rx_handle_wifi_qos_packets(egc, rxdesc_ring, pdesc_head, skb_head);
 		}
 	}
 
@@ -670,6 +730,14 @@ send_to_stack:
 		if (edma_rx_handle_sc_cc_packets(egc, rxdesc_ring, rxdesc_desc, skb)) {
 			return false;
 		}
+	}
+
+	/*
+	 * See if this packet is tagged with valid wifi qos.
+	 * WiFi-QoS flag needs to be set for tree_id processing.
+	 */
+	if (unlikely(EDMA_RXDESC_WIFI_QOS_FLAG_VALID_GET(rxdesc_desc))) {
+		edma_rx_handle_wifi_qos_packets(egc, rxdesc_ring, rxdesc_desc, skb);
 	}
 
 	/*

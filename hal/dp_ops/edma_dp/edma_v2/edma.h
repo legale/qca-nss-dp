@@ -19,12 +19,13 @@
 #ifndef __EDMA_H__
 #define __EDMA_H__
 
+#include <fal/fal_qm.h>
+#include <fal/fal_qos.h>
 #include <linux/netdevice.h>
 #include <nss_dp_arch.h>
 #include <nss_dp_api_if.h>
 #include <nss_dp_hal_if.h>
-#include <fal/fal_qos.h>
-#include <fal/fal_qm.h>
+#include <ppe_drv.h>
 #include "edma_rx.h"
 #include "edma_tx.h"
 #ifdef NSS_DP_PPEDS_SUPPORT
@@ -82,11 +83,6 @@
  * QID to RID Table
  */
 #define EDMA_QID2RID_TABLE_MEM(q)	(0xb9000 + (0x4 * (q)))
-
-/*
- * Total number of service codes
- */
-#define EDMA_SAWF_SC_MAX	256
 
 /*
  * edma_port_ucast_queues
@@ -169,10 +165,10 @@ struct edma_misc_stats {
 };
 
 /*
- * edma_sc_stats
+ * edma_sawf_sc_stats
  *	EDMA per-service code stats
  */
-struct edma_sc_stats {
+struct edma_sawf_sc_stats {
 	uint64_t rx_packets;		/* Per service code counter for packets recieved on queues from PPE */
 	uint64_t rx_bytes;		/* Per service code counter for bytes recieved on queues from PPE */
 	struct u64_stats_sync syncp;	/* Synchronization pointer */
@@ -240,8 +236,8 @@ struct edma_gbl_ctx {
 
 	struct edma_misc_stats __percpu *misc_stats;
 			/* Per CPU miscellaneous statistics */
-	struct edma_sc_stats sc_stats[EDMA_SAWF_SC_MAX];
-			/* Per Service Code Stats */
+	struct edma_sawf_sc_stats sawf_sc_stats[PPE_DRV_SAWF_SC_MAX];
+			/* Per service class stats */
 
 	uint32_t tx_priority_level;
 			/* Tx priority level per port */
