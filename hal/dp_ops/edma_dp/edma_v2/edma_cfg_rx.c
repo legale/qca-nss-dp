@@ -126,8 +126,8 @@ static int edma_cfg_rx_desc_ring_setup(struct edma_rxdesc_ring *rxdesc_ring)
 	/*
 	 * Allocate RxDesc ring descriptors
 	 */
-	rxdesc_ring->pdesc = kmalloc((sizeof(struct edma_rxdesc_desc) *  rxdesc_ring->count) +
-				SMP_CACHE_BYTES,  GFP_KERNEL | __GFP_ZERO);
+	rxdesc_ring->pdesc = kmalloc(roundup((sizeof(struct edma_rxdesc_desc) * rxdesc_ring->count),
+						SMP_CACHE_BYTES), GFP_KERNEL | __GFP_ZERO);
 	if (!rxdesc_ring->pdesc) {
 		edma_err("Descriptor alloc for RXDESC ring %u failed\n",
 							rxdesc_ring->ring_id);
@@ -139,8 +139,8 @@ static int edma_cfg_rx_desc_ring_setup(struct edma_rxdesc_ring *rxdesc_ring)
 	/*
 	 * Allocate secondary RxDesc ring descriptors
 	 */
-	rxdesc_ring->sdesc = kmalloc((sizeof(struct edma_rxdesc_sec_desc) *  rxdesc_ring->count) +
-				SMP_CACHE_BYTES,  GFP_KERNEL | __GFP_ZERO);
+	rxdesc_ring->sdesc = kmalloc(roundup((sizeof(struct edma_rxdesc_sec_desc) * rxdesc_ring->count),
+						SMP_CACHE_BYTES), GFP_KERNEL | __GFP_ZERO);
 	if (!rxdesc_ring->sdesc) {
 		edma_err("Descriptor alloc for secondary RX ring %u failed\n",
 							rxdesc_ring->ring_id);

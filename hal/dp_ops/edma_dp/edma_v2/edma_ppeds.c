@@ -83,8 +83,8 @@ static int edma_ppeds_rx_secondary_alloc(struct edma_rxdesc_ring *rxdesc_ring)
 		/*
 		 * Allocate secondary RxDesc ring descriptors
 		 */
-		rxdesc_ring->sdesc = kmalloc((sizeof(struct edma_rxdesc_sec_desc) *  rxdesc_ring->count) +
-				SMP_CACHE_BYTES,  GFP_KERNEL | __GFP_ZERO);
+		rxdesc_ring->sdesc = kmalloc(roundup((sizeof(struct edma_rxdesc_sec_desc) *  rxdesc_ring->count),
+					SMP_CACHE_BYTES), GFP_KERNEL | __GFP_ZERO);
 
 		edma_ppeds_rx_ring_sec_mem = rxdesc_ring->sdesc;
 		edma_ppeds_rx_ring_entries = rxdesc_ring->count;
@@ -148,8 +148,8 @@ static int edma_ppeds_tx_secondary_alloc(struct edma_txdesc_ring *txdesc_ring)
 		/*
 		 * Allocate sencondary Tx ring descriptors
 		 */
-		txdesc_ring->sdesc = kmalloc((sizeof(struct edma_sec_txdesc) *  txdesc_ring->count) +
-				SMP_CACHE_BYTES, GFP_KERNEL | __GFP_ZERO);
+		txdesc_ring->sdesc = kmalloc(roundup((sizeof(struct edma_sec_txdesc) * txdesc_ring->count),
+					SMP_CACHE_BYTES), GFP_KERNEL | __GFP_ZERO);
 
 		edma_ppeds_tx_ring_sec_mem = txdesc_ring->sdesc;
 		edma_ppeds_tx_ring_entries = txdesc_ring->count;
