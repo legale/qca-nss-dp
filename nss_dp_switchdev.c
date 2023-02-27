@@ -399,7 +399,6 @@ static int nss_dp_bridge_attr_set(struct net_device *dev,
 		break;
 
 	default:
-		pr_info("Operation %u is not supported\n", attr->id);
 		return -EOPNOTSUPP;
 	}
 
