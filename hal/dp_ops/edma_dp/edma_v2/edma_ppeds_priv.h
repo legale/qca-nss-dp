@@ -19,7 +19,7 @@
 
 #include "nss_dp_ppeds.h"
 
-#define EDMA_PPEDS_MAX_NODES	3	/* Maximum number of supported PPE-DS nodes */
+#define EDMA_PPEDS_MAX_NODES	4	/* Maximum number of supported PPE-DS nodes */
 #define EDMA_PPEDS_RX_WEIGHT	1	/* PPE-DS Rx processing budget */
 #define EDMA_PPEDS_RXFILL_WEIGHT	128	/* PPE-DS Rxfill processing budget */
 

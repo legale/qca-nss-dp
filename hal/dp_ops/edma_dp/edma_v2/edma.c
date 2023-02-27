@@ -728,6 +728,19 @@ static int edma_of_get_pdata(struct resource *edma_res)
 		return -EINVAL;
 	}
 
+#if defined(NSS_DP_POINT_OFFLOAD)
+	if (edma_gbl_ctx.ppeds_drv.num_nodes == EDMA_PPEDS_MAX_NODES) {
+		/*
+		 * Only enable EDMA_PPEDS_MAX_NODES - 1 PPE-DS nodes when the
+		 * point offload feature is enabled (because one pair of EDMA
+		 * Rx/Tx rings will be shared between the point offload feature
+		 * and the PPE-DS feature).
+		 */
+		edma_gbl_ctx.ppeds_drv.num_nodes = EDMA_PPEDS_MAX_NODES - 1;
+		edma_warn("Error: PPE node count is %d when point offload is enabled.",
+				 EDMA_PPEDS_MAX_NODES);
+	}
+#endif
 	edma_debug("PPE-DS num nodes: %d\n", edma_gbl_ctx.ppeds_drv.num_nodes);
 
 	if (edma_gbl_ctx.ppeds_drv.num_nodes > 0) {
