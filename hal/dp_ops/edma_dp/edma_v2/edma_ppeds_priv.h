@@ -18,10 +18,14 @@
 #define __EDMA_PPEDS_PRIV__
 
 #include "nss_dp_ppeds.h"
+#include <linux/atomic.h>
+#include <linux/bitops.h>
 
 #define EDMA_PPEDS_MAX_NODES	4	/* Maximum number of supported PPE-DS nodes */
 #define EDMA_PPEDS_RX_WEIGHT	1	/* PPE-DS Rx processing budget */
 #define EDMA_PPEDS_RXFILL_WEIGHT	128	/* PPE-DS Rxfill processing budget */
+#define EDMA_PPEDS_SERVICE_STOP_BIT 0
+#define EDMA_PPEDS_TXCOMP_NAPI_BIT 1
 
 /*
  * Rx rings flow control threshold values
@@ -92,6 +96,8 @@ struct edma_ppeds {
 	uint32_t rxdesc_intr;			/* PPE-DS EDMA Rx IRQ */
 	uint8_t db_idx;				/* PPE-DS node index */
 	nss_dp_ppeds_handle_t ppeds_handle;	/* PPE-DS handle */
+	uint32_t umac_reset_inprogress;		/* Umac reset progress status */
+	unsigned long service_running;		/* PPE-DS ring usage service status */
 };
 
 /*
