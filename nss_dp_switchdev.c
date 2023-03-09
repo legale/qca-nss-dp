@@ -377,7 +377,7 @@ static int nss_dp_bridge_attr_set(struct net_device *dev,
 
 		err = ppe_drv_br_set_ageing_time(attr->u.ageing_time / 100);
 		if (err != PPE_DRV_RET_SUCCESS) {
-			pr_info("Failed to set ageing time with err_no %d\n", err);
+			netdev_dbg(dev, "Failed to set ageing time with err_no %d\n", err);
 			return -EIO;
 		}
 		break;
@@ -386,13 +386,13 @@ static int nss_dp_bridge_attr_set(struct net_device *dev,
 		learning = attr->u.brport_flags & (BR_LEARNING);
 		iface = ppe_drv_iface_get_by_dev(dev);
 		if (!iface) {
-			pr_info("Failed to get iface for interface %s\n", dev->name);
+			netdev_dbg(dev, "Failed to get iface for interface %s\n", dev->name);
 			return -EINVAL;
 		}
 
 		err = ppe_drv_br_port_set_learning(iface, learning);
 		if (err != PPE_DRV_RET_SUCCESS) {
-			pr_info("Failed to set bridge port learning %s with err_no %d\n",
+			netdev_dbg(dev, "Failed to set bridge port learning %s with err_no %d\n",
 					(learning ? "enable" : "disable"), err);
 			return -EIO;
 		}
@@ -428,14 +428,14 @@ static int nss_dp_fdb_event(struct switchdev_notifier_fdb_info *fdb_info,
 	br_dev = netdev_master_upper_dev_get_rcu(dev);
 	rcu_read_unlock();
 	if (unlikely(!br_dev)) {
-		pr_info("Fail to get bridge dev\n");
+		netdev_dbg(dev, "Fail to get bridge dev\n");
 		ret = notifier_from_errno(-EINVAL);
 		goto out;
 	}
 
 	ppe_iface = ppe_drv_iface_get_by_dev(br_dev);
 	if (unlikely(!ppe_iface)) {
-		pr_info("Failed to get ppe_drv_iface\n");
+		netdev_dbg(dev, "Failed to get ppe_drv_iface\n");
 		ret = notifier_from_errno(-EINVAL);
 		goto out;
 	}
@@ -445,7 +445,7 @@ static int nss_dp_fdb_event(struct switchdev_notifier_fdb_info *fdb_info,
 		err = ppe_drv_br_fdb_add(ppe_iface,
 				(unsigned char *)fdb_info->addr, true, dp_priv->macid);
 		if (err != PPE_DRV_RET_SUCCESS) {
-			pr_info("Failed to add fdb %pM with err_no %d\n", fdb_info->addr,
+			netdev_dbg(dev, "Failed to add fdb %pM with err_no %d\n", fdb_info->addr,
 					err);
 			ret = notifier_from_errno(-EIO);
 			goto out;
@@ -456,7 +456,7 @@ static int nss_dp_fdb_event(struct switchdev_notifier_fdb_info *fdb_info,
 		err = ppe_drv_br_fdb_del_bymac(ppe_iface,
 				(unsigned char *)fdb_info->addr);
 		if (err != PPE_DRV_RET_SUCCESS) {
-			pr_info("Failed to del fdb %pM with err_no %d\n", fdb_info->addr,
+			netdev_dbg(dev, "Failed to del fdb %pM with err_no %d\n", fdb_info->addr,
 					err);
 			ret = notifier_from_errno(-EIO);
 			goto out;
@@ -479,15 +479,13 @@ static int nss_dp_switchdev_event_nb(struct notifier_block *unused,
 	switch (event) {
 	case SWITCHDEV_PORT_ATTR_SET:
 		return nss_dp_switchdev_port_attr_set_event(dev, ptr);
-		break;
 
 	case SWITCHDEV_FDB_ADD_TO_DEVICE:
 	case SWITCHDEV_FDB_DEL_TO_DEVICE:
 		return nss_dp_fdb_event(ptr, event, dev);
-		break;
 
 	default:
-		pr_info("Switchdev event %lu is not supported\n", event);
+		netdev_dbg(dev, "Switchdev event %lu is not supported\n", event);
 	}
 
 	return NOTIFY_DONE;
