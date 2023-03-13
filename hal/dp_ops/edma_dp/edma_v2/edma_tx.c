@@ -321,6 +321,17 @@ static inline void edma_tx_fill_vp_desc(struct nss_dp_dev *dp_dev, struct edma_p
 	EDMA_DST_INFO_SET(txd, 0);
 }
 
+
+/*
+ *  edma_tx_get_int_pri_from_skb()
+ *      We retrieve int_pri from skb using this API
+ *
+ */
+static inline unsigned int edma_tx_get_int_pri_from_skb(struct sk_buff *skb)
+{
+	return skb->priority;
+}
+
 /*
  * edma_tx_fill_pp_desc()
  *	Populate descriptor fields to bypass PPE processing and forward
@@ -363,6 +374,10 @@ static inline void edma_tx_fill_pp_desc(struct nss_dp_dev *dp_dev, struct edma_p
 	 */
 	EDMA_TXDESC_SERVICE_CODE_SET(txd, EDMA_SC_BYPASS);
 	EDMA_DST_INFO_SET(txd, dp_dev->macid);
+	/*
+	 * Set the tx queue priority for the packet
+	 */
+	EDMA_TXDESC_INT_PRI_SET(txd, edma_tx_get_int_pri_from_skb(skb));
 }
 
 /*
