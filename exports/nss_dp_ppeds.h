@@ -54,6 +54,14 @@ typedef struct nss_dp_ppeds_handle {
 	char priv[] __aligned(NETDEV_ALIGN);	/**< Private area */
 } nss_dp_ppeds_handle_t;
 
+/**
+ * nss_ppe_ds_ctx_info_handle
+ *	PPE-DS umac reset handle
+ */
+struct nss_ppe_ds_ctx_info_handle {
+	uint32_t umac_reset_inprogress;		/**< umac reset in progress information */
+};
+
 /*
  * nss_dp_ppeds_cb
  *	PPE-DS callbacks
@@ -70,6 +78,8 @@ struct nss_dp_ppeds_cb {
 	void (*enable_wlan_intr)(nss_dp_ppeds_handle_t *edma_handle,
 				bool enable);
 				/**< PPE-DS toggle wlan interrupt */
+	void (*notify_napi_done)(nss_dp_ppeds_handle_t *edma_handle);
+				/**< PPE-DS notify NAPI completed */
 };
 
 /*
@@ -81,11 +91,13 @@ struct nss_dp_ppeds_ops {
 				/**< PPE-DS instance allocation operation */
 	bool (*reg)(nss_dp_ppeds_handle_t *ppeds_handle);
 				/**< PPE-DS instance registration operation */
-	int (*start)(nss_dp_ppeds_handle_t *ppeds_handle,  uint8_t intr_enable);
+	int (*start)(nss_dp_ppeds_handle_t *ppeds_handle,  uint8_t intr_enable,
+			struct nss_ppe_ds_ctx_info_handle *info_hdl);
 				/**< PPE-DS instance start operation */
 	void (*refill)(nss_dp_ppeds_handle_t *ppeds_handle, int count);
 				/**< PPE-DS instance refill operation */
-	void (*stop)(nss_dp_ppeds_handle_t *ppeds_handle, uint8_t intr_enable);
+	void (*stop)(nss_dp_ppeds_handle_t *ppeds_handle, uint8_t intr_enable,
+			struct nss_ppe_ds_ctx_info_handle *info_hdl);
 				/**< PPE-DS instance stop operation */
 	void (*free)(nss_dp_ppeds_handle_t *ppeds_handle);
 				/**< PPE-DS instance free operation */
@@ -105,6 +117,8 @@ struct nss_dp_ppeds_ops {
 				/**< PPE-DS Set rxfill ring producer index */
 	void (*enable_rx_reap_intr)(nss_dp_ppeds_handle_t *ppeds_handle);
 				/**< PPE-DS enable edma interrupt */
+	void (*service_status_update)(nss_dp_ppeds_handle_t *ppeds_handle, bool enable);
+				/**< PPE-DS check and update ring usage service */
 };
 
 /**

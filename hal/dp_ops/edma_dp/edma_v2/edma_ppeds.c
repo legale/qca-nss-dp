@@ -216,11 +216,13 @@ static uint32_t edma_ppeds_tx_complete(uint32_t work_to_do, struct edma_txcmpl_r
 static int edma_ppeds_txcomp_napi_poll(struct napi_struct *napi, int budget)
 {
 	struct edma_txcmpl_ring *txcmpl_ring = (struct edma_txcmpl_ring *)napi;
+	struct edma_ppeds *ppeds_node = container_of(txcmpl_ring, struct edma_ppeds, txcmpl_ring);
 	struct edma_gbl_ctx *egc = &edma_gbl_ctx;
 	uint32_t txcmpl_intr_status;
 	int work_done = 0;
 	uint32_t reg_data;
 
+	set_bit(EDMA_PPEDS_TXCOMP_NAPI_BIT, &ppeds_node->service_running);
 	do {
 		work_done += edma_ppeds_tx_complete(budget - work_done, txcmpl_ring);
 		if (work_done >= budget) {
@@ -239,8 +241,16 @@ static int edma_ppeds_txcomp_napi_poll(struct napi_struct *napi, int budget)
 	/*
 	 * Set TXCMPL ring interrupt mask
 	 */
-	edma_reg_write(EDMA_REG_TX_INT_MASK(txcmpl_ring->id),
-			egc->txcmpl_intr_mask);
+	clear_bit(EDMA_PPEDS_TXCOMP_NAPI_BIT, &ppeds_node->service_running);
+	if (!ppeds_node->umac_reset_inprogress) {
+		edma_reg_write(EDMA_REG_TX_INT_MASK(txcmpl_ring->id),
+				egc->txcmpl_intr_mask);
+	} else {
+		if ((!ppeds_node->service_running) &&
+			 (ppeds_node->ops->notify_napi_done)) {
+			ppeds_node->ops->notify_napi_done(&ppeds_node->ppeds_handle);
+		}
+	}
 
 	return work_done;
 }
@@ -323,8 +333,10 @@ static int edma_ppeds_rxfill_napi_poll(struct napi_struct *napi, int budget)
 	edma_reg_read(EDMA_REG_RXFILL_INT_STAT(rxfill_ring->ring_id));
 napi_complete:
 	napi_complete(napi);
-	edma_reg_write(EDMA_REG_RXFILL_INT_MASK(rxfill_ring->ring_id),
+	if (!ppeds_node->umac_reset_inprogress) {
+		edma_reg_write(EDMA_REG_RXFILL_INT_MASK(rxfill_ring->ring_id),
 				EDMA_RXFILL_INT_MASK);
+	}
 	return 0;
 }
 
@@ -362,8 +374,10 @@ static int edma_ppeds_rx_napi_poll(struct napi_struct *napi, int budget)
 	/*
 	 * Set RXDESC ring interrupt mask
 	 */
-	edma_reg_write(EDMA_REG_RXDESC_INT_MASK(rxdesc_ring->ring_id),
-			EDMA_RXDESC_INT_MASK_PKT_INT);
+	if (!ppeds_node->umac_reset_inprogress) {
+		edma_reg_write(EDMA_REG_RXDESC_INT_MASK(rxdesc_ring->ring_id),
+				EDMA_RXDESC_INT_MASK_PKT_INT);
+	}
 
 	return 0;
 }
@@ -1060,7 +1074,8 @@ static void edma_ppeds_set_rxfill_prod_idx(nss_dp_ppeds_handle_t *ppeds_handle,
  * edma_ppeds_inst_start()
  *	PPE-DS EDMA instance start API
  */
-int edma_ppeds_inst_start(nss_dp_ppeds_handle_t *ppeds_handle, uint8_t intr_enable)
+int edma_ppeds_inst_start(nss_dp_ppeds_handle_t *ppeds_handle, uint8_t intr_enable,
+				struct nss_ppe_ds_ctx_info_handle *info_hdl)
 {
 	uint32_t data;
 	struct edma_ppeds_drv *drv = &edma_gbl_ctx.ppeds_drv;
@@ -1089,14 +1104,18 @@ int edma_ppeds_inst_start(nss_dp_ppeds_handle_t *ppeds_handle, uint8_t intr_enab
 			EDMA_RXFILL_LOW_THRE_MASK & ppeds_handle->eth_rxfill_low_thr);
 	edma_reg_write(EDMA_REG_RXFILL_INT_MASK(ppeds_node->rxfill_ring.ring_id),
 			EDMA_RXFILL_INT_MASK);
-	napi_enable(&ppeds_node->rxfill_ring.napi);
+	if (!ppeds_node->umac_reset_inprogress) {
+		napi_enable(&ppeds_node->rxfill_ring.napi);
+	}
 
 	/*
 	 * Enable TxComp interrupt along with the associated NAPI
 	 */
 	edma_reg_write(EDMA_REG_TX_INT_MASK(ppeds_node->txcmpl_ring.id),
 			EDMA_TX_INT_MASK_PKT_INT);
-	napi_enable(&ppeds_node->txcmpl_ring.napi);
+	if (!ppeds_node->umac_reset_inprogress) {
+		napi_enable(&ppeds_node->txcmpl_ring.napi);
+	}
 
 	/*
 	 * Enable RxDesc Ring.
@@ -1137,6 +1156,7 @@ int edma_ppeds_inst_start(nss_dp_ppeds_handle_t *ppeds_handle, uint8_t intr_enab
 	write_lock_bh(&drv->lock);
 	node_cfg->node_state = EDMA_PPEDS_NODE_STATE_START_DONE;
 	write_unlock_bh(&drv->lock);
+	ppeds_node->umac_reset_inprogress = info_hdl->umac_reset_inprogress;
 
 	return 0;
 }
@@ -1145,13 +1165,15 @@ int edma_ppeds_inst_start(nss_dp_ppeds_handle_t *ppeds_handle, uint8_t intr_enab
  * edma_ppeds_inst_stop()
  *	PPE-DS EDMA instance stop API
  */
-void edma_ppeds_inst_stop(nss_dp_ppeds_handle_t *ppeds_handle, uint8_t intr_enable)
+void edma_ppeds_inst_stop(nss_dp_ppeds_handle_t *ppeds_handle, uint8_t intr_enable,
+				struct nss_ppe_ds_ctx_info_handle *info_hdl)
 {
 	uint32_t data;
 	struct edma_ppeds_drv *drv = &edma_gbl_ctx.ppeds_drv;
 	struct edma_ppeds *ppeds_node = container_of(ppeds_handle, struct edma_ppeds, ppeds_handle);
 	struct edma_ppeds_node_cfg *node_cfg = &(drv->ppeds_node_cfg[ppeds_node->db_idx]);
 
+	ppeds_node->umac_reset_inprogress = info_hdl->umac_reset_inprogress;
 	write_lock_bh(&drv->lock);
 	if (node_cfg->node_state != EDMA_PPEDS_NODE_STATE_START_DONE) {
 		edma_err("%px: Invalid node state: %d, PPE-DS stop failed\n", ppeds_node,
@@ -1193,8 +1215,10 @@ void edma_ppeds_inst_stop(nss_dp_ppeds_handle_t *ppeds_handle, uint8_t intr_enab
 	 */
 	edma_reg_write(EDMA_REG_TX_INT_MASK(ppeds_node->txcmpl_ring.id),
 			EDMA_MASK_INT_CLEAR);
-	synchronize_irq(ppeds_node->txcmpl_intr);
-	napi_disable(&ppeds_node->txcmpl_ring.napi);
+	if (!ppeds_node->umac_reset_inprogress) {
+		synchronize_irq(ppeds_node->txcmpl_intr);
+		napi_disable(&ppeds_node->txcmpl_ring.napi);
+	}
 
 	/*
 	 * Clear enable bit, set the disable bit and wait until the RxFill ring is disabled.
@@ -1216,8 +1240,10 @@ void edma_ppeds_inst_stop(nss_dp_ppeds_handle_t *ppeds_handle, uint8_t intr_enab
 	 */
 	edma_reg_write(EDMA_REG_RXFILL_INT_MASK(ppeds_node->rxfill_ring.ring_id),
 			EDMA_MASK_INT_CLEAR);
-	synchronize_irq(ppeds_node->rxfill_intr);
-	napi_disable(&ppeds_node->rxfill_ring.napi);
+	if (!ppeds_node->umac_reset_inprogress) {
+		synchronize_irq(ppeds_node->rxfill_intr);
+		napi_disable(&ppeds_node->rxfill_ring.napi);
+	}
 
 	/*
 	 * Wait for 5ms and then clean the tx complete ring
@@ -1406,6 +1432,25 @@ int edma_ppeds_init(struct edma_ppeds_drv *drv)
 }
 
 /*
+ * edma_ppeds_service_status_update()
+ *	Set/Unset EDMA ring usage service and notify NAPI done.
+ */
+void edma_ppeds_service_status_update(nss_dp_ppeds_handle_t *ppeds_handle, bool enable)
+{
+	struct edma_ppeds *ppeds_node = container_of(ppeds_handle, struct edma_ppeds, ppeds_handle);
+	if (enable) {
+		set_bit(EDMA_PPEDS_SERVICE_STOP_BIT, &ppeds_node->service_running);
+	} else {
+		clear_bit(EDMA_PPEDS_SERVICE_STOP_BIT, &ppeds_node->service_running);
+
+		if ((!ppeds_node->service_running) &&
+				(ppeds_node->ops->notify_napi_done)) {
+			ppeds_node->ops->notify_napi_done(&ppeds_node->ppeds_handle);
+		}
+	}
+}
+
+/*
  * edma_ppeds_ops
  *	PPE-DS operations
  */
@@ -1424,4 +1469,5 @@ struct nss_dp_ppeds_ops edma_ppeds_ops = {
 	.get_rxfill_cons_idx	=	edma_ppeds_get_rxfill_cons_idx,
 	.set_rxfill_prod_idx	=	edma_ppeds_set_rxfill_prod_idx,
 	.enable_rx_reap_intr	=	edma_ppeds_enable_rx_reap_intr,
+	.service_status_update	=	edma_ppeds_service_status_update,
 };
