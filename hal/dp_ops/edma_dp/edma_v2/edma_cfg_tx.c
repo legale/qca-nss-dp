@@ -256,7 +256,7 @@ static void edma_cfg_tx_cmpl_ring_configure(struct edma_txcmpl_ring *txcmpl_ring
  * edma_cfg_tx_cmpl_mapping_fill()
  *	API to fill tx complete ring mapping per core
  */
-static void edma_cfg_tx_cmpl_mapping_fill(struct edma_gbl_ctx *egc)
+void edma_cfg_tx_cmpl_mapping_fill(struct edma_gbl_ctx *egc)
 {
 	uint32_t i, j;
 
@@ -700,9 +700,11 @@ void edma_cfg_tx_napi_delete(struct edma_gbl_ctx *egc)
  * edma_cfg_tx_napi_add()
  *	TX NAPI add API
  */
-void edma_cfg_tx_napi_add(struct edma_gbl_ctx *egc, struct net_device *netdev)
+void edma_cfg_tx_napi_add(struct edma_gbl_ctx *egc, struct net_device *netdev, uint32_t macid)
 {
 	uint32_t i;
+	uint32_t index, ring_idx;
+	struct edma_txcmpl_ring *txcmpl_ring;
 
 	if ((nss_dp_tx_napi_budget < EDMA_TX_NAPI_WORK_MIN) ||
 		(nss_dp_tx_napi_budget > EDMA_TX_NAPI_WORK_MAX)) {
@@ -711,8 +713,13 @@ void edma_cfg_tx_napi_add(struct edma_gbl_ctx *egc, struct net_device *netdev)
 		nss_dp_tx_napi_budget = NSS_DP_HAL_TX_NAPI_BUDGET;
 	}
 
-	for (i = 0; i < egc->num_txcmpl_rings; i++) {
-		struct edma_txcmpl_ring *txcmpl_ring = &egc->txcmpl_rings[i];
+	/*
+	 * Adding tx napi for a interface with each queue.
+	 */
+	index = nss_dp_get_idx_from_macid(macid);
+	for_each_possible_cpu(i) {
+		ring_idx = egc->txcmpl_map[index][i] - egc->txcmpl_ring_start;
+		txcmpl_ring = &egc->txcmpl_rings[ring_idx];
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 		netif_napi_add(netdev, &txcmpl_ring->napi,
@@ -722,6 +729,7 @@ void edma_cfg_tx_napi_add(struct edma_gbl_ctx *egc, struct net_device *netdev)
 				edma_tx_napi_poll, nss_dp_tx_napi_budget);
 #endif
 		txcmpl_ring->napi_added = true;
+		edma_debug("Napi added for txcmpl ring: %u\n", txcmpl_ring->id);
 	}
 	edma_info("Tx NAPI budget: %d\n", nss_dp_tx_napi_budget);
 }

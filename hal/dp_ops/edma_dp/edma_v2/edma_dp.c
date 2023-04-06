@@ -376,16 +376,20 @@ static int edma_dp_configure(struct net_device *netdev, uint32_t macid)
 
 	edma_cfg_tx_fill_per_port_tx_map(netdev, macid);
 
+	/*
+	 * TX NAPI addition
+	 */
+	edma_cfg_tx_napi_add(&edma_gbl_ctx, netdev, macid);
+
 	if (edma_gbl_ctx.napi_added) {
 		return 0;
 	}
 
 	/*
-	 * TX/RX NAPI addition
+	 * RX NAPI addition
 	 * Note: We do not support Rx for VPs dummy MACs.
 	 */
 	edma_cfg_rx_napi_add(&edma_gbl_ctx, netdev);
-	edma_cfg_tx_napi_add(&edma_gbl_ctx, netdev);
 
 	/*
 	 * Register the interrupt handlers

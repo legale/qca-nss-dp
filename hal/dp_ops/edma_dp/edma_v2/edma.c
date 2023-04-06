@@ -965,6 +965,7 @@ static int edma_hw_init(struct edma_gbl_ctx *egc)
 	edma_cfg_tx_rings_disable(egc);
 
 	edma_cfg_tx_mapping(egc);
+	edma_cfg_tx_cmpl_mapping_fill(egc);
 	edma_cfg_rx_mapping(egc);
 #if defined(NSS_DP_POINT_OFFLOAD)
 	edma_cfg_tx_point_offload_mapping(egc);
