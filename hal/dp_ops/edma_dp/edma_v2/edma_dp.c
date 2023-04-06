@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -146,8 +146,10 @@ static netdev_tx_t edma_dp_xmit(struct nss_dp_data_plane_ctx *dpc,
 	struct edma_pcpu_stats *pcpu_stats;
 	struct edma_tx_stats *stats;
 	struct nss_dp_dev *dp_dev;
+	struct sk_buff *segs;
 	uint32_t skbq;
 	int ret;
+	enum edma_tx_gso result;
 
 	/*
 	 * Select a TX ring
@@ -161,17 +163,54 @@ static netdev_tx_t edma_dp_xmit(struct nss_dp_data_plane_ctx *dpc,
 	stats = this_cpu_ptr(pcpu_stats->tx_stats);
 
 	/*
-	 * Transmit the packet
+	 * HW does not support TSO for packets with more than or equal to
+	 * 32 segments. HW hangs up if it sees more than 32 segments.
+	 * Perform SW GSO for such packets.
 	 */
-	ret = edma_tx_ring_xmit(netdev, NULL, skb, txdesc_ring, stats);
-	if (likely(ret == EDMA_TX_OK)) {
+	result = edma_tx_gso_segment(skb, netdev, &segs);
+	if (likely(result == EDMA_TX_GSO_NOT_NEEDED)) {
+
+		/*
+		 * Transmit the packet
+		 */
+		ret = edma_tx_ring_xmit(netdev, NULL, skb, txdesc_ring, stats);
+		if (unlikely(ret != EDMA_TX_OK)) {
+			dev_kfree_skb_any(skb);
+			u64_stats_update_begin(&stats->syncp);
+			++stats->tx_drops;
+			u64_stats_update_end(&stats->syncp);
+		}
+
+		return NETDEV_TX_OK;
+	} else if (unlikely(result == EDMA_TX_GSO_FAIL)) {
+		edma_debug("%px: SW GSO failed for segment size: (%d)\n", skb, skb_shinfo(skb)->gso_segs);
+		dev_kfree_skb_any(skb);
+		u64_stats_update_begin(&stats->syncp);
+		++stats->tx_gso_drop_pkts;
+		u64_stats_update_end(&stats->syncp);
 		return NETDEV_TX_OK;
 	}
 
-	dev_kfree_skb_any(skb);
 	u64_stats_update_begin(&stats->syncp);
-	++stats->tx_drops;
+	++stats->tx_gso_pkts;
 	u64_stats_update_end(&stats->syncp);
+
+	dev_kfree_skb_any(skb);
+	while (segs) {
+		skb = segs;
+		segs = segs->next;
+
+		/*
+		 * Transmit the packet
+		 */
+		ret = edma_tx_ring_xmit(netdev, NULL, skb, txdesc_ring, stats);
+		if (unlikely(ret != EDMA_TX_OK)) {
+			dev_kfree_skb_any(skb);
+			u64_stats_update_begin(&stats->syncp);
+			++stats->tx_drops;
+			u64_stats_update_end(&stats->syncp);
+		}
+	}
 
 	return NETDEV_TX_OK;
 }
@@ -251,6 +290,8 @@ static void edma_dp_get_ndo_stats(struct nss_dp_data_plane_ctx *dpc,
 		stats->stats.tx_fraglist_with_nr_frags_packets += txp.tx_fraglist_with_nr_frags_pkts;
 		stats->stats.tx_tso_packets += txp.tx_tso_pkts;
 		stats->stats.tx_tso_drop_packets += txp.tx_tso_drop_pkts;
+		stats->stats.tx_gso_packets += txp.tx_gso_pkts;
+		stats->stats.tx_gso_drop_packets += txp.tx_gso_drop_pkts;
 	}
 }
 

@@ -309,7 +309,7 @@ static void edma_rx_handle_wifi_qos_packets(struct edma_gbl_ctx *egc, struct edm
 		 */
 		skb->mark = EDMA_RX_SAWF_METADATA_CONSTRUCT(service_class, peer_id, wifi_qos);
 
-		edma_debug("%px : SAWF mark configured = 0x%x\n", egc, sawf->mark);
+		edma_debug("%px : SAWF mark configured = 0x%x\n", egc, skb->mark);
 		break;
 	default:
 		edma_debug("%p : Invalid tree-id type = %u\n", egc, tree_id_type);

@@ -2,7 +2,7 @@
  **************************************************************************
  * Copyright (c) 2016-2018, 2020-2021 The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -60,6 +60,8 @@ static const struct qcom_ethtool_stats qcom_gstrings_stats[] = {
 	{"tx_fraglist_nr_frags_packets", QCOM_STAT(tx_fraglist_with_nr_frags_packets)},
 	{"tx_tso_packets", QCOM_STAT(tx_tso_packets)},
 	{"tx_tso_drop_packets", QCOM_STAT(tx_tso_drop_packets)},
+	{"tx_gso_packets", QCOM_STAT(tx_gso_packets)},
+	{"tx_gso_drop_packets", QCOM_STAT(tx_gso_drop_packets)},
 #endif
 };
 

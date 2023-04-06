@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -31,6 +31,8 @@ netdev_tx_t edma_dp_vp_xmit(struct nss_dp_data_plane_ctx *dpc, struct nss_dp_vp_
 	struct edma_txdesc_ring *txdesc_ring;
 	struct edma_pcpu_stats *pcpu_stats;
 	struct edma_tx_stats *stats;
+	struct sk_buff *segs;
+	enum edma_tx_gso result;
 	int ret;
 
 	/*
@@ -42,17 +44,53 @@ netdev_tx_t edma_dp_vp_xmit(struct nss_dp_data_plane_ctx *dpc, struct nss_dp_vp_
 	stats = this_cpu_ptr(pcpu_stats->tx_stats);
 
 	/*
-	 * Transmit the packet
+	 * HW does not support TSO for packets with more than or equal to
+	 * 32 segments. HW hangs up if it sees more than 32 segments.
+	 * Perform SW GSO for such packets.
 	 */
-	ret = edma_tx_ring_xmit(vpdev, dptxi, skb, txdesc_ring, stats);
-	if (likely(ret == EDMA_TX_OK)) {
+	result = edma_tx_gso_segment(skb, vpdev, &segs);
+	if (likely(result == EDMA_TX_GSO_NOT_NEEDED)) {
+
+		/*
+		 * Transmit the packet
+		 */
+		ret = edma_tx_ring_xmit(vpdev, dptxi, skb, txdesc_ring, stats);
+		if (unlikely(ret != EDMA_TX_OK)) {
+			dev_kfree_skb_any(skb);
+			u64_stats_update_begin(&stats->syncp);
+			++stats->tx_drops;
+			u64_stats_update_end(&stats->syncp);
+		}
+
+
+		return NETDEV_TX_OK;
+	}
+
+	if (unlikely(result == EDMA_TX_GSO_FAIL)) {
+		edma_debug("%px: SW GSO failed for segment size: (%d)\n", skb, skb_shinfo(skb)->gso_segs);
+		dev_kfree_skb_any(skb);
+		u64_stats_update_begin(&stats->syncp);
+		++stats->tx_gso_drop_pkts;
+		u64_stats_update_end(&stats->syncp);
 		return NETDEV_TX_OK;
 	}
 
 	dev_kfree_skb_any(skb);
-	u64_stats_update_begin(&stats->syncp);
-	++stats->tx_drops;
-	u64_stats_update_end(&stats->syncp);
+	while (segs) {
+		skb = segs;
+		segs = segs->next;
+
+		/*
+		 * Transmit the packet
+		 */
+		ret = edma_tx_ring_xmit(vpdev, dptxi, skb, txdesc_ring, stats);
+		if (unlikely(ret != EDMA_TX_OK)) {
+			dev_kfree_skb_any(skb);
+			u64_stats_update_begin(&stats->syncp);
+			++stats->tx_drops;
+			u64_stats_update_end(&stats->syncp);
+		}
+	}
 
 	return NETDEV_TX_OK;
 }

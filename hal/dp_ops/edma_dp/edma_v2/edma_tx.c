@@ -257,6 +257,17 @@ static uint32_t edma_tx_skb_nr_frags(struct edma_txdesc_ring *txdesc_ring, struc
 		buf_len = skb_frag_size(frag);
 
 		/*
+		 * Zero size segment can lead EDMA HW to hang so, we don't want to process them.
+		 * Zero size segment can happen during TSO operation if there is nothing but header
+		 * in the primary segment.
+		 */
+		if (unlikely(buf_len == 0)) {
+			num_descs--;
+			i++;
+			continue;
+		}
+
+		/*
 		 * Setting the MORE bit on the previous Tx descriptor.
 		 * Note: We will flush this descriptor as well later.
 		 */
@@ -413,7 +424,7 @@ static struct edma_pri_txdesc *edma_tx_skb_first_desc(struct nss_dp_dev *dp_dev,
 
 /*
  * edma_tx_skb_sg_fill_desc()
- * 	API to fill SG skb into Tx descriptor. Handles both nr_frags and fraglist cases.
+ *	API to fill SG skb into Tx descriptor. Handles both nr_frags and fraglist cases.
  */
 static uint32_t edma_tx_skb_sg_fill_desc(struct nss_dp_dev *dp_dev, struct edma_txdesc_ring *txdesc_ring,
 		struct edma_pri_txdesc **txdesc, struct sk_buff *skb, uint32_t *hw_next_to_use,
@@ -456,7 +467,13 @@ static uint32_t edma_tx_skb_sg_fill_desc(struct nss_dp_dev *dp_dev, struct edma_
 		skb_walk_frags(skb, iter_skb) {
 			uint32_t num_nr_frag = 0;
 
+			/*
+			 * This case could happen during the packet decapsulation. All header content might be removed.
+			 */
 			buf_len = skb_headlen(iter_skb);
+			if (unlikely(buf_len == 0)) {
+				goto skip_primary;
+			}
 
 			/*
 			 * We make sure to flush this descriptor later
@@ -479,6 +496,7 @@ static uint32_t edma_tx_skb_sg_fill_desc(struct nss_dp_dev *dp_dev, struct edma_
 			/*
 			 * skb fraglist skb can have nr_frags
 			 */
+skip_primary:
 			if (unlikely(skb_shinfo(iter_skb)->nr_frags)) {
 				num_nr_frag = edma_tx_skb_nr_frags(txdesc_ring, &txd, iter_skb, hw_next_to_use);
 				num_descs += num_nr_frag;
@@ -530,39 +548,6 @@ static uint32_t edma_tx_skb_sg_fill_desc(struct nss_dp_dev *dp_dev, struct edma_
 
 	*txdesc = txd;
 	return num_descs;
-}
-
-/*
- * edma_tx_num_descs_for_sg()
- *	Calculates number of descriptors needed for SG
- */
-static uint32_t edma_tx_num_descs_for_sg(struct sk_buff *skb)
-{
-	uint32_t nr_frags_first = 0, num_tx_desc_needed = 0;
-
-	/*
-	 * Check if we have enough Tx descriptors for SG
-	 */
-	if (unlikely(skb_shinfo(skb)->nr_frags)) {
-		nr_frags_first = skb_shinfo(skb)->nr_frags;
-		BUG_ON(nr_frags_first > MAX_SKB_FRAGS);
-		num_tx_desc_needed += nr_frags_first;
-	}
-
-	/*
-	 * Walk through fraglist skbs making a note of nr_frags
-	 * One Tx desc for fraglist skb. Fraglist skb may have further nr_frags.
-	 */
-	if (unlikely(skb_has_frag_list(skb))) {
-		struct sk_buff *iter_skb;
-		skb_walk_frags(skb, iter_skb) {
-			uint32_t nr_frags = skb_shinfo(iter_skb)->nr_frags;
-			BUG_ON(nr_frags > MAX_SKB_FRAGS);
-			num_tx_desc_needed += (1 + nr_frags);
-		}
-	}
-
-	return num_tx_desc_needed;
 }
 
 /*
@@ -653,14 +638,16 @@ enum edma_tx edma_tx_ring_xmit(struct net_device *netdev, struct nss_dp_vp_tx_in
 			skb->fast_recycled = 1;
 		}
 	} else {
+		num_tx_desc_needed = edma_tx_num_descs_for_sg(skb);
+
 		/*
 		 * HW does not support TSO for packets with more than 32 segments.
 		 * HW hangs up if it sees more than 32 segments.
 		 * Kernel Perform GSO for such packets with netdev gso_max_segs set to 32.
 		 */
-		if (unlikely(skb_shinfo(skb)->gso_segs > EDMA_TX_TSO_SEG_MAX)) {
+		if (unlikely(num_tx_desc_needed > EDMA_TX_TSO_SEG_MAX)) {
 			edma_debug("Number of segments %u more than %u for %d ring\n",
-					skb_shinfo(skb)->gso_segs, EDMA_TX_TSO_SEG_MAX, txdesc_ring->id);
+					num_tx_desc_needed, EDMA_TX_TSO_SEG_MAX, txdesc_ring->id);
 			u64_stats_update_begin(&txdesc_stats->syncp);
 			++txdesc_stats->tso_max_seg_exceed;
 			u64_stats_update_end(&txdesc_stats->syncp);
@@ -671,9 +658,6 @@ enum edma_tx edma_tx_ring_xmit(struct net_device *netdev, struct nss_dp_vp_tx_in
 
 			return EDMA_TX_FAIL;
 		}
-
-		num_tx_desc_needed += 1;
-		num_tx_desc_needed += edma_tx_num_descs_for_sg(skb);
 
 		if (unlikely(num_tx_desc_needed > txdesc_ring->avail_desc)) {
 			txdesc_ring->avail_desc = edma_tx_avail_desc(txdesc_ring, hw_next_to_use);

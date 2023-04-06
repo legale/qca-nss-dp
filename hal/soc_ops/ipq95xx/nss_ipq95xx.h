@@ -28,7 +28,7 @@
 /*
  * Maximum supported GSO segments
  */
-#define NSS_DP_HAL_GSO_MAX_SEGS		32
+#define NSS_DP_HAL_GSO_MAX_SEGS		GSO_MAX_SEGS
 
 /*
  * Number of TX/RX queue supported
@@ -119,6 +119,8 @@ struct nss_dp_hal_gmac_stats {
 	uint64_t tx_fraglist_with_nr_frags_packets;	/**< Number of TX fraglist packets with nr fragments */
 	uint64_t tx_tso_packets;	/**< Number of TX TCP segmentation offload packets */
 	uint64_t tx_tso_drop_packets;	/**< Number of TX TCP segmentation dropped packets */
+	uint64_t tx_gso_packets;	/**< Number of TX SW GSO packets */
+	uint64_t tx_gso_drop_packets;	/**< Number of TX SW GSO dropped packets */
 };
 
 /**

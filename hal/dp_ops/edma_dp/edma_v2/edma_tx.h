@@ -142,6 +142,16 @@ enum edma_tx {
 };
 
 /*
+ * edma_tx_gso
+ *	List of return values of EDMA TX GSO.
+ */
+enum edma_tx_gso {
+	EDMA_TX_GSO_NOT_NEEDED = 0,	/* Packet has segment count less than TX_TSO_SEG_MAX */
+	EDMA_TX_GSO_SUCCEED = 1,	/* GSO Succeed. Send the list to next node */
+	EDMA_TX_GSO_FAIL = 2,		/* GSO failed drop the packet */
+};
+
+/*
  * edma_tx_stats
  *	EDMA TX per cpu stats
  */
@@ -154,6 +164,8 @@ struct edma_tx_stats {
 	uint64_t tx_fraglist_with_nr_frags_pkts;
 	uint64_t tx_tso_pkts;
 	uint64_t tx_tso_drop_pkts;
+	uint64_t tx_gso_pkts;
+	uint64_t tx_gso_drop_pkts;
 	struct u64_stats_sync syncp;
 };
 
@@ -171,7 +183,7 @@ struct edma_tx_cmpl_stats {
 
 /*
  * edma_tx_desc_stats
- * 	EDMA Tx descriptor ring statistics structure
+ *	EDMA Tx descriptor ring statistics structure
  */
 struct edma_tx_desc_stats {
 	uint64_t no_desc_avail;			/* No descriptor available to transmit */
@@ -262,5 +274,63 @@ uint32_t edma_tx_complete(uint32_t work_to_do,
 				struct edma_txcmpl_ring *txcmpl_ring);
 irqreturn_t edma_tx_handle_irq(int irq, void *ctx);
 int edma_tx_napi_poll(struct napi_struct *napi, int budget);
+
+/*
+ * edma_tx_num_descs_for_sg()
+ *	Calculates number of descriptors needed for SG
+ */
+static inline uint32_t edma_tx_num_descs_for_sg(struct sk_buff *skb)
+{
+	uint32_t nr_frags_first = 0, num_tx_desc_needed = 0;
+
+	/*
+	 * Check if we have enough Tx descriptors for SG
+	 */
+	if (unlikely(skb_shinfo(skb)->nr_frags)) {
+		nr_frags_first = skb_shinfo(skb)->nr_frags;
+		BUG_ON(nr_frags_first > MAX_SKB_FRAGS);
+		num_tx_desc_needed += nr_frags_first;
+	}
+
+	/*
+	 * Walk through fraglist skbs making a note of nr_frags
+	 * One Tx desc for fraglist skb. Fraglist skb may have further nr_frags.
+	 */
+	if (unlikely(skb_has_frag_list(skb))) {
+		struct sk_buff *iter_skb;
+		skb_walk_frags(skb, iter_skb) {
+			uint32_t nr_frags = skb_shinfo(iter_skb)->nr_frags;
+			BUG_ON(nr_frags > MAX_SKB_FRAGS);
+			num_tx_desc_needed += (1 + nr_frags);
+		}
+	}
+
+	return (num_tx_desc_needed + 1);
+}
+
+/*
+ * edma_tx_gso_segment()
+ *	Do GSO for packets that has more than 32-segments
+ */
+static inline enum edma_tx_gso edma_tx_gso_segment(struct sk_buff *skb, struct net_device *netdev, struct sk_buff **segs)
+{
+	uint32_t num_tx_desc_needed;
+
+	if (likely(!skb_is_nonlinear(skb))) {
+		return EDMA_TX_GSO_NOT_NEEDED;
+	}
+
+	num_tx_desc_needed = edma_tx_num_descs_for_sg(skb);
+	if (likely(num_tx_desc_needed <= EDMA_TX_TSO_SEG_MAX)) {
+		return EDMA_TX_GSO_NOT_NEEDED;
+	}
+
+	*segs = skb_gso_segment(skb, netdev->features & ~(NETIF_F_TSO | NETIF_F_TSO6));
+	if (unlikely(IS_ERR_OR_NULL(*segs))) {
+		return EDMA_TX_GSO_FAIL;
+	}
+
+	return EDMA_TX_GSO_SUCCEED;
+}
 
 #endif	/* __EDMA_TX_H__ */
