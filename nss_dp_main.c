@@ -390,7 +390,8 @@ static int nss_dp_open(struct net_device *netdev)
 	}
 #endif
 
-	if (dp_priv->data_plane_ops->mac_addr(dp_priv->dpc, netdev->dev_addr)) {
+	if (dp_priv->data_plane_ops->mac_addr(dp_priv->dpc,
+				(unsigned char *)netdev->dev_addr)) {
 		netdev_dbg(netdev, "Data plane set MAC address failed\n");
 		return -EAGAIN;
 	}
@@ -595,6 +596,9 @@ static int32_t nss_dp_of_get_pdata(struct device_node *np,
 	uint8_t *maddr;
 	struct nss_dp_dev *dp_priv;
 	struct resource memres_devtree = {0};
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(6, 1, 0))
+	uint8_t mac_addr[ETH_ALEN];
+#endif
 
 	dp_priv = netdev_priv(netdev);
 
@@ -621,7 +625,13 @@ static int32_t nss_dp_of_get_pdata(struct device_node *np,
 	hal_pdata->netdev = netdev;
 	hal_pdata->macid = dp_priv->macid;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 	dp_priv->phy_mii_type = of_get_phy_mode(np);
+#else
+	if (of_get_phy_mode(np, &dp_priv->phy_mii_type))
+		return -EFAULT;
+#endif
+
 	dp_priv->link_poll = of_property_read_bool(np, "qcom,link-poll");
 	if (of_property_read_u32(np, "qcom,phy-mdio-addr",
 		&dp_priv->phy_mdio_addr) && dp_priv->link_poll) {
@@ -633,17 +643,29 @@ static int32_t nss_dp_of_get_pdata(struct device_node *np,
 	of_property_read_u32(np, "qcom,forced-speed", &dp_priv->forced_speed);
 	of_property_read_u32(np, "qcom,forced-duplex", &dp_priv->forced_duplex);
 
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 	maddr = (uint8_t *)of_get_mac_address(np);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(5, 4, 0))
 	if (IS_ERR((void *)maddr)) {
 		maddr = NULL;
 	}
 #endif
+#else
+	maddr = mac_addr;
+	if (of_get_mac_address(np, maddr))
+		maddr = NULL;
+#endif /* LINUX_VERSION_CODE 6.1.0 */
 
 	if (maddr && is_valid_ether_addr(maddr)) {
-		ether_addr_copy(netdev->dev_addr, maddr);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
+		ether_addr_copy(netdev->dev_addr, (const uint8_t *)maddr);
+#else
+		eth_hw_addr_set(netdev, maddr);
+#endif
+
 	} else {
-		random_ether_addr(netdev->dev_addr);
+		eth_hw_addr_random(netdev);
 		pr_info("GMAC%d(%px) Invalid MAC@ - using %pM\n", dp_priv->macid,
 						dp_priv, netdev->dev_addr);
 	}
@@ -677,7 +699,9 @@ static struct mii_bus *nss_dp_mdio_attach(struct platform_device *pdev)
 {
 	struct device_node *mdio_node;
 	struct platform_device *mdio_plat;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0))
 	struct ipq40xx_mdio_data *mdio_data;
+#endif
 
 	/*
 	 * Find mii_bus using "mdio-bus" handle.
@@ -704,6 +728,9 @@ static struct mii_bus *nss_dp_mdio_attach(struct platform_device *pdev)
 		return NULL;
 	}
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0))
+	return dev_get_drvdata(&mdio_plat->dev);
+#else
 	mdio_data = dev_get_drvdata(&mdio_plat->dev);
 	if (!mdio_data) {
 		dev_err(&pdev->dev, "cannot get mii bus reference from device data\n");
@@ -712,6 +739,7 @@ static struct mii_bus *nss_dp_mdio_attach(struct platform_device *pdev)
 	}
 
 	return mdio_data->mii_bus;
+#endif
 }
 
 #ifdef CONFIG_NET_SWITCHDEV
