@@ -39,6 +39,7 @@
 #endif
 #include "nss_dp_hal.h"
 #define JUMBO_MRU_3K 3072
+#define NSS_DP_CAPWAP_VP_RX_CORE_INVALID 0XFFFF
 
 /* ipq40xx_mdio_data */
 struct ipq40xx_mdio_data {
@@ -67,6 +68,10 @@ MODULE_PARM_DESC(jumbo_mru, "jumbo mode");
 int tx_requeue_stop = 1;
 module_param(tx_requeue_stop, int, 0640);
 MODULE_PARM_DESC(tx_requeue_stop, "disable tx requeue function");
+
+uint32_t nss_dp_capwap_vp_rx_core = NSS_DP_CAPWAP_VP_RX_CORE_INVALID;
+module_param(nss_dp_capwap_vp_rx_core, int, S_IRUGO);
+MODULE_PARM_DESC(nss_dp_capwap_vp_rx_core, "Capwap VP handling core");
 
 int nss_dp_rx_napi_budget = NSS_DP_HAL_RX_NAPI_BUDGET;
 module_param(nss_dp_rx_napi_budget, int, S_IRUGO);
