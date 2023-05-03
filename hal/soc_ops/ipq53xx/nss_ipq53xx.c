@@ -185,36 +185,6 @@ int32_t nss_dp_hal_configure_clocks(void *ctx)
 		return -1;
 	}
 
-	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_MEM_NOC_AHB_CLK,
-					NSS_DP_EDMA_MEM_NOC_AHB_CLK_FREQ);
-	if (err) {
-		return -1;
-	}
-
-	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_MEM_NOC_SNOC_AXI_CLK,
-					NSS_DP_EDMA_MEM_NOC_SNOC_AXI_CLK_FREQ);
-	if (err) {
-		return -1;
-	}
-
-	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_MEM_NOC_APSS_AXI_CLK,
-					NSS_DP_EDMA_MEM_NOC_APSS_AXI_CLK_FREQ);
-	if (err) {
-		return -1;
-	}
-
-	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_MEM_NOC_QOSGEN_EXTREF_CLK,
-					NSS_DP_EDMA_MEM_NOC_QOSGEN_EXTREF_CLK_FREQ);
-	if (err) {
-		return -1;
-	}
-
-	err = nss_dp_hal_clock_set_and_enable(&pdev->dev, NSS_DP_EDMA_MEM_NOC_TS_CLK,
-					NSS_DP_EDMA_MEM_NOC_TS_CLK_FREQ);
-	if (err) {
-		return -1;
-	}
-
 	return 0;
 }
 
