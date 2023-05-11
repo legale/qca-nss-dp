@@ -973,6 +973,14 @@ static int edma_hw_init(struct edma_gbl_ctx *egc)
 	edma_reg_write(EDMA_REG_DMAR_CTRL, data);
 
 	/*
+	 * Configure Tx Timeout Threshold
+	 */
+#if defined(NSS_DP_IPQ53XX)
+	data = EDMA_TX_TIMEOUT_THRESH_VAL;
+	edma_reg_write(EDMA_REG_TX_TIMEOUT_THRESH, data);
+#endif
+
+	/*
 	 * Misc error mask
 	 */
 	data = EDMA_MISC_AXI_RD_ERR_MASK |
