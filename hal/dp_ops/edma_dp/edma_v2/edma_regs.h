@@ -205,7 +205,7 @@
 /*
  * EDMA_REG_TX_TIMEOUT_THRESH register
  */
-#define EDMA_TX_TIMEOUT_THRESH_VAL		0x200
+#define EDMA_TX_TIMEOUT_THRESH_VAL		0xFFFF
 
 /*
  * EDMA RXDESC base address mask
