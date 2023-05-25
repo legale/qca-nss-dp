@@ -785,10 +785,11 @@ static inline struct net_device *edma_rx_get_src_dev(
 				== EDMA_RXDESC_SRCINFO_TYPE_PORTID)) {
 		src_port_num = src_info & EDMA_RXDESC_PORTNUM_BITS;
 	} else {
-		edma_warn("Src_info_type:0x%x. Drop skb:%px\n",
-				(src_info &
-				 EDMA_RXDESC_SRCINFO_TYPE_MASK),
-				skb);
+		if (net_ratelimit()) {
+			edma_warn("Src_info_type:0x%x. Drop skb:%px\n",
+					(src_info & EDMA_RXDESC_SRCINFO_TYPE_MASK), skb);
+		}
+
 		u64_stats_update_begin(&rxdesc_stats->syncp);
 		++rxdesc_stats->src_port_inval_type;
 		u64_stats_update_end(&rxdesc_stats->syncp);
@@ -800,9 +801,12 @@ static inline struct net_device *edma_rx_get_src_dev(
 	 */
 	if (unlikely(src_port_num <= NSS_DP_HAL_MAX_PORTS)) {
 		if (unlikely(src_port_num < NSS_DP_START_IFNUM)) {
-			edma_warn("Port number error :%d. \
-					Drop skb:%px\n",
-					src_port_num, skb);
+			if (net_ratelimit()) {
+				edma_warn("Port number error :%d. \
+						Drop skb:%px\n",
+						src_port_num, skb);
+			}
+
 			u64_stats_update_begin(&rxdesc_stats->syncp);
 			++rxdesc_stats->src_port_inval;
 			u64_stats_update_end(&rxdesc_stats->syncp);
@@ -820,9 +824,12 @@ static inline struct net_device *edma_rx_get_src_dev(
 	}
 
 	if (unlikely(src_port_num < PPE_DRV_VIRTUAL_START)) {
-		edma_warn("Port number error :%d. \
+		if (net_ratelimit()) {
+			edma_warn("Port number error :%d. \
 				Drop skb:%px\n",
 				src_port_num, skb);
+		}
+
 		u64_stats_update_begin(&rxdesc_stats->syncp);
 		++rxdesc_stats->src_port_inval;
 		u64_stats_update_end(&rxdesc_stats->syncp);
@@ -838,8 +845,11 @@ done:
 	if (likely(ndev))
 		return ndev;
 
-	edma_warn("Netdev Null src_info_type:0x%x. Drop skb:%px\n",
+	if (net_ratelimit()) {
+		edma_warn("Netdev Null src_info_type:0x%x. Drop skb:%px\n",
 			src_port_num, skb);
+	}
+
 	u64_stats_update_begin(&rxdesc_stats->syncp);
 	++rxdesc_stats->src_port_inval_netdev;
 	u64_stats_update_end(&rxdesc_stats->syncp);
