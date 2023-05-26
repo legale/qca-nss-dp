@@ -69,11 +69,6 @@
 #define NSS_DP_EDMA_CC_NSSNOC_CE_AXI_CLK	"nss-nssnoc-ce-axi-clk"
 #define NSS_DP_EDMA_SNOC_NSSNOC_CLK		"nss-snoc-nssnoc-clk"
 #define NSS_DP_EDMA_SNOC_NSSNOC_1_CLK		"nss-snoc-nssnoc-1-clk"
-#define NSS_DP_EDMA_MEM_NOC_AHB_CLK		"nss-mem-noc-ahb-clk"
-#define NSS_DP_EDMA_MEM_NOC_SNOC_AXI_CLK	"nss-mem-noc-snoc-axi-clk"
-#define NSS_DP_EDMA_MEM_NOC_APSS_AXI_CLK	"nss-mem-noc-apss-axi-clk"
-#define NSS_DP_EDMA_MEM_NOC_QOSGEN_EXTREF_CLK	"nss-mem-noc-qosgen-extref-clk"
-#define NSS_DP_EDMA_MEM_NOC_TS_CLK		"nss-mem-noc-ts-clk"
 
 /*
  * EDMA clock's frequencies
@@ -97,11 +92,6 @@
 #define NSS_DP_EDMA_CC_NSSNOC_CE_AXI_CLK_FREQ		200000000
 #define NSS_DP_EDMA_SNOC_NSSNOC_CLK_FREQ		266666666
 #define NSS_DP_EDMA_SNOC_NSSNOC_1_CLK_FREQ		266666666
-#define NSS_DP_EDMA_MEM_NOC_AHB_CLK_FREQ		100000000
-#define NSS_DP_EDMA_MEM_NOC_SNOC_AXI_CLK_FREQ		266666666
-#define NSS_DP_EDMA_MEM_NOC_APSS_AXI_CLK_FREQ		533333333
-#define NSS_DP_EDMA_MEM_NOC_QOSGEN_EXTREF_CLK_FREQ	6000000
-#define NSS_DP_EDMA_MEM_NOC_TS_CLK_FREQ			75000000
 
 /**
  * nss_dp_hal_gmac_stats
