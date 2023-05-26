@@ -24,6 +24,7 @@
 #include <linux/platform_device.h>
 #include <linux/switch.h>
 #include <linux/version.h>
+#include <linux/ethtool.h>
 
 #include "nss_dp_api_if.h"
 #include "nss_dp_hal_if.h"

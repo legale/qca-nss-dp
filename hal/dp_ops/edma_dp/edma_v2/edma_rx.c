@@ -193,14 +193,23 @@ static inline int edma_rx_alloc_buffer_list(struct edma_rxfill_ring *rxfill_ring
 		 * If the packet is fast transmitted and hence fast recycled,
 		 * we can be assured that invalidate was already done at the
 		 * time of previous transmit
+		 * TODO : Remove Linux kernel version check once we enable SKB recycler
 		 */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 		if (unlikely(!skb->fast_recycled)) {
+#endif
 			dmac_inv_range_no_dsb((void *)skb->data,
 					      (void *)(skb->data + rx_alloc_size -
 					      EDMA_RX_SKB_HEADROOM -
 					      NET_IP_ALIGN));
+
+/*
+ * TODO : Remove Linux kernel version check once we enable SKB recycler
+ */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 		}
 		skb->fast_recycled = 0;
+#endif
 		prod_idx = (prod_idx + 1) & EDMA_RX_RING_SIZE_MASK;
 	}
 
@@ -540,7 +549,11 @@ process_next_scatter:
 	 * packet decap is successful then data offset will point
 	 * to inner payload.
 	 */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 	if (unlikely(!__pskb_pull(skb_head, EDMA_RXDESC_DATA_OFFSET_GET(rxdesc_ring->pdesc_head)))) {
+#else
+	if (unlikely(!pskb_pull(skb_head, EDMA_RXDESC_DATA_OFFSET_GET(rxdesc_ring->pdesc_head)))) {
+#endif
 		/*
 		 * Discard the SKB that we have been building,
 		 * in addition to the SKB linked to current descriptor.
@@ -761,7 +774,7 @@ static inline struct net_device *edma_rx_get_src_dev(
 		struct edma_rxdesc_desc *rxdesc_desc,
 		struct sk_buff *skb)
 {
-	struct net_device *ndev;
+	struct net_device *ndev = NULL;
 	uint32_t src_info = EDMA_RXDESC_SRC_INFO_GET(rxdesc_desc);
 	uint8_t src_port_num;
 
@@ -803,27 +816,27 @@ static inline struct net_device *edma_rx_get_src_dev(
 		 * port numbers start from '1'.
 		 */
 		ndev = egc->netdev_arr[src_port_num - 1];
-	} else {
-
-		if (unlikely(src_port_num < PPE_DRV_VIRTUAL_START)) {
-			edma_warn("Port number error :%d. \
-					Drop skb:%px\n",
-					src_port_num, skb);
-			u64_stats_update_begin(&rxdesc_stats->syncp);
-			++rxdesc_stats->src_port_inval;
-			u64_stats_update_end(&rxdesc_stats->syncp);
-			return NULL;
-		}
-
-		/*
-		 * Last netdev corresponds to VP dummy netdev
-		 */
-		ndev = egc->netdev_arr[NSS_DP_MAX_PORTS - 1];
+		goto done;
 	}
 
-	if (likely(ndev)) {
+	if (unlikely(src_port_num < PPE_DRV_VIRTUAL_START)) {
+		edma_warn("Port number error :%d. \
+				Drop skb:%px\n",
+				src_port_num, skb);
+		u64_stats_update_begin(&rxdesc_stats->syncp);
+		++rxdesc_stats->src_port_inval;
+		u64_stats_update_end(&rxdesc_stats->syncp);
+		return NULL;
+	}
+
+	/*
+	 * Last netdev corresponds to VP dummy netdev
+	 */
+	ndev = egc->netdev_arr[NSS_DP_MAX_PORTS - 1];
+
+done:
+	if (likely(ndev))
 		return ndev;
-	}
 
 	edma_warn("Netdev Null src_info_type:0x%x. Drop skb:%px\n",
 			src_port_num, skb);
@@ -1092,10 +1105,20 @@ bool edma_rx_phy_tstamp_buf(__attribute__((unused))void *app_data, struct sk_buf
 	 * set to the correct PTP class value by calling ptp_classify_raw
 	 * in drv->rxtstamp function.
 	 */
-	if (ndev && ndev->phydev && ndev->phydev->drv && ndev->phydev->drv->rxtstamp) {
+	if (ndev && ndev->phydev && ndev->phydev->drv
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
+			&& ndev->phydev->drv->rxtstamp
+#else
+			&& phy_has_rxtstamp(ndev->phydev)
+#endif
+			) {
 		skb->protocol = eth_type_trans(skb, ndev);
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 		if (likely(ndev->phydev->drv->rxtstamp(ndev->phydev, skb, 0))) {
+#else
+		if (likely(phy_rxtstamp(ndev->phydev, skb, 0))) {
+#endif
 			return true;
 		} else {
 			__skb_push(skb, ETH_HLEN);

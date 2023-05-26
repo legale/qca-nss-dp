@@ -133,6 +133,10 @@ uint32_t edma_tx_complete(uint32_t work_to_do, struct edma_txcmpl_ring *txcmpl_r
 				u64_stats_update_end(&txcmpl_stats->syncp);
 			}
 
+	/*
+	 * TODO : Remove Kernel version check once we enable SKB recycler
+	 */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 			/*
 			 * Fast-recycle the SKB with a list, if skb is originally allocated
 			 * from recycler and has been fast trasmitted
@@ -143,15 +147,23 @@ uint32_t edma_tx_complete(uint32_t work_to_do, struct edma_txcmpl_ring *txcmpl_r
 			} else {
 				dev_kfree_skb(skb);
 			}
+#else
+			dev_kfree_skb(skb);
+#endif
 		}
 
 		cons_idx = ((cons_idx + 1) & EDMA_TX_RING_SIZE_MASK);
 		txcmpl = EDMA_TXCMPL_DESC(txcmpl_ring, cons_idx);
 	}
 
+	/*
+	 * TODO : Remove Kernel version check once we enable SKB recycler
+	 */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 	if (likely(!skb_queue_empty(&h))) {
 		dev_kfree_skb_list_fast(&h);
 	}
+#endif
 
 	txcmpl_ring->cons_idx = cons_idx;
 	txcmpl_ring->avail_pkt -= count;
@@ -374,10 +386,14 @@ static inline void edma_tx_fill_pp_desc(struct nss_dp_dev *dp_dev, struct edma_p
 	 */
 	EDMA_TXDESC_SERVICE_CODE_SET(txd, EDMA_SC_BYPASS);
 	EDMA_DST_INFO_SET(txd, dp_dev->macid);
+
 	/*
 	 * Set the tx queue priority for the packet
+	 * TODO : Remove Kernel version check once we enable PPE/SFE QoS
 	 */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 	EDMA_TXDESC_INT_PRI_SET(txd, skb_get_int_pri(skb));
+#endif
 }
 
 /*
@@ -572,6 +588,7 @@ static uint32_t edma_tx_avail_desc(struct edma_txdesc_ring *txdesc_ring, uint32_
  */
 static inline void edma_tx_phy_tstamp_buf(struct net_device *ndev, struct sk_buff *skb)
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 	/*
 	 * Function drv->txtstamp will create a clone of skb if necessary,
 	 * the PTP_CLASS_ value 0 is passed to phy driver, which will be
@@ -581,6 +598,11 @@ static inline void edma_tx_phy_tstamp_buf(struct net_device *ndev, struct sk_buf
 	if (ndev && ndev->phydev && ndev->phydev->drv && ndev->phydev->drv->txtstamp) {
 		ndev->phydev->drv->txtstamp(ndev->phydev, skb, 0);
 	}
+#else
+	if (phy_has_txtstamp(ndev->phydev)) {
+		phy_txtstamp(ndev->phydev, skb, 0);
+	}
+#endif
 }
 
 /*
@@ -628,6 +650,10 @@ enum edma_tx edma_tx_ring_xmit(struct net_device *netdev, struct nss_dp_vp_tx_in
 		EDMA_TXDESC_ENDIAN_SET(txdesc);
 		num_desc_filled++;
 
+	/*
+	 * TODO : Remove Kernel version check once we enable SKB recycler
+	 */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 		/*
 		 * We set fast_recycled flag if packet has taken the
 		 * SFE fast transmit path, so that any Rx DMA driver
@@ -637,6 +663,7 @@ enum edma_tx edma_tx_ring_xmit(struct net_device *netdev, struct nss_dp_vp_tx_in
 		if (likely(skb->fast_xmit) && likely(skb->is_from_recycler)) {
 			skb->fast_recycled = 1;
 		}
+#endif
 	} else {
 		num_tx_desc_needed = edma_tx_num_descs_for_sg(skb);
 

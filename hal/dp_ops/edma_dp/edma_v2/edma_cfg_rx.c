@@ -1392,8 +1392,13 @@ void edma_cfg_rx_napi_add(struct edma_gbl_ctx *egc, struct net_device *netdev)
 
 	for (i = 0; i < egc->num_rxdesc_rings; i++) {
 		struct edma_rxdesc_ring *rxdesc_ring = &egc->rxdesc_rings[i];
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 		netif_napi_add(netdev, &rxdesc_ring->napi,
-				edma_rx_napi_poll, nss_dp_rx_napi_budget);
+			 edma_rx_napi_poll, nss_dp_rx_napi_budget);
+#else
+		netif_napi_add_weight(netdev, &rxdesc_ring->napi,
+			 edma_rx_napi_poll, nss_dp_rx_napi_budget);
+#endif
 		rxdesc_ring->napi_added = true;
 	}
 	edma_info("%s: Rx NAPI budget: %d\n", netdev->name, nss_dp_rx_napi_budget);

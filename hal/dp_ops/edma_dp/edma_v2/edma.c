@@ -1169,8 +1169,8 @@ int edma_init(void)
 	/*
 	 * Remap register resource
 	 */
-	edma_gbl_ctx.reg_base = ioremap_nocache((edma_gbl_ctx.reg_resource)->start,
-				resource_size(edma_gbl_ctx.reg_resource));
+	edma_gbl_ctx.reg_base = ioremap((edma_gbl_ctx.reg_resource)->start,
+			resource_size(edma_gbl_ctx.reg_resource));
 	if (!edma_gbl_ctx.reg_base) {
 		edma_err("Unable to remap EDMA register memory.\n");
 		ret = -EFAULT;
