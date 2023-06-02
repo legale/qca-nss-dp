@@ -129,6 +129,7 @@
 	cpu_to_le32s(&((desc)->word4)); \
 	cpu_to_le32s(&((desc)->word5)); \
 	cpu_to_le32s(&((desc)->word6)); \
+	cpu_to_le32s(&((desc)->word7)); \
 }
 
 /*
