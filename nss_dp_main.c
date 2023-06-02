@@ -568,6 +568,9 @@ struct net_device_ops nss_dp_netdev_ops = {
 	.ndo_validate_addr = eth_validate_addr,
 	.ndo_change_mtu = nss_dp_change_mtu,
 	.ndo_do_ioctl = nss_dp_do_ioctl,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
+	.ndo_eth_ioctl = phy_do_ioctl_running,
+#endif
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0))
 	.ndo_bridge_setlink = switchdev_port_bridge_setlink,
