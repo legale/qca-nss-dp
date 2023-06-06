@@ -115,8 +115,11 @@ uint32_t edma_tx_complete(uint32_t work_to_do, struct edma_txcmpl_ring *txcmpl_r
 		 */
 		skb = (struct sk_buff *)EDMA_TXCMPL_OPAQUE_GET(txcmpl);
 		if (unlikely(!skb)) {
-			edma_warn("Invalid skb: cons_idx:%u prod_idx:%u word2:%x word3:%x\n",
-					cons_idx, prod_idx, txcmpl->word2, txcmpl->word3);
+			if (net_ratelimit()) {
+				edma_warn("Invalid skb: cons_idx:%u prod_idx:%u word2:%x word3:%x\n",
+						cons_idx, prod_idx, txcmpl->word2, txcmpl->word3);
+			}
+
 			u64_stats_update_begin(&txcmpl_stats->syncp);
 			++txcmpl_stats->invalid_buffer;
 			u64_stats_update_end(&txcmpl_stats->syncp);
@@ -126,8 +129,14 @@ uint32_t edma_tx_complete(uint32_t work_to_do, struct edma_txcmpl_ring *txcmpl_r
 
 			txcmpl_errors = EDMA_TXCOMP_RING_ERROR_GET(txcmpl->word3);
 			if (unlikely(txcmpl_errors)) {
-				edma_err("Error 0x%0x observed in tx complete %d ring\n",
-						txcmpl_errors, txcmpl_ring->id);
+				/*
+				 * TODO : Demux and add a debug print per error type.
+				 */
+				if (net_ratelimit()) {
+					edma_err("Error 0x%0x observed in tx complete %d ring\n",
+							txcmpl_errors, txcmpl_ring->id);
+				}
+
 				u64_stats_update_begin(&txcmpl_stats->syncp);
 				++txcmpl_stats->errors;
 				u64_stats_update_end(&txcmpl_stats->syncp);
