@@ -140,6 +140,8 @@
 #define EDMA_RXDESC_CPU_CODE_VALID_GET(desc)	(((le32_to_cpu((desc)->word1)) & 0x00001000) >> 12)
 #define EDMA_RXDESC_SERVICE_CODE_GET(desc)	(((le32_to_cpu((desc)->word1)) & 0x01FF0000) >> 16)
 #define EDMA_RXDESC_CPU_CODE_GET(desc)		(((le32_to_cpu((desc)->word5)) & 0x03FF0000) >> 16)
+#define EDMA_RXDESC_ACL_IDX_VALID_GET(desc)	(((le32_to_cpu((desc)->word1)) & 0x80000000) >> 31)
+#define EDMA_RXDESC_ACL_IDX_GET(desc)		(((le32_to_cpu((desc)->word1)) & 0x3FFF0000) >> 16)
 
 /*
  * Extracting Tree ID and WiFi-QoS from descriptor.
