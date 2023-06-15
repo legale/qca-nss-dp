@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,6 +17,18 @@
 #include "edma.h"
 #include "edma_debug.h"
 #include "edma_debugfs.h"
+
+/*
+ * edma_debugfs_ring_usage_dump
+ * 	Format to print the EDMA ring utilization (full)
+ */
+const char *edma_debugfs_ring_usage_dump[EDMA_RING_USAGE_MAX_FULL] = {
+	"100 percentage full",
+	"90 to 100 percentage full",
+	"70 to 90 percentage full",
+	"50 to 70 percentage full",
+	"Less than 50 percentage full"
+};
 
 /*
  * edma_debugfs_print_banner()
@@ -63,8 +75,14 @@ static int edma_debugfs_rx_rings_stats_show(struct seq_file *m, void __attribute
 	struct edma_gbl_ctx *egc = &edma_gbl_ctx;
 	uint32_t rx_fill_start_id = egc->rxfill_ring_start;
 	uint32_t rx_desc_start_id = egc->rxdesc_ring_start;
-	uint32_t i;
+	uint32_t i, j;
 	unsigned int start;
+#ifdef NSS_DP_PPEDS_SUPPORT
+	struct edma_rxfill_ring *rxfill_ring;
+	struct edma_rxdesc_ring *rxdesc_ring;
+	struct edma_ppeds_drv *drv = &edma_gbl_ctx.ppeds_drv;
+	struct edma_ppeds *ppeds_node;
+#endif
 
 	rx_fill_stats = kzalloc(egc->num_rxfill_rings * sizeof(struct edma_rx_fill_stats),
 				 GFP_KERNEL);
@@ -94,6 +112,8 @@ static int edma_debugfs_rx_rings_stats_show(struct seq_file *m, void __attribute
 			start = u64_stats_fetch_begin_irq(&stats->syncp);
 			rx_fill_stats[i].alloc_failed = stats->alloc_failed;
 			rx_fill_stats[i].page_alloc_failed = stats->page_alloc_failed;
+			memcpy(&rx_fill_stats[i].ring_stats, &stats->ring_stats,
+					sizeof(struct edma_ring_util_stats));
 		} while (u64_stats_fetch_retry_irq(&stats->syncp, start));
 	}
 
@@ -111,6 +131,8 @@ static int edma_debugfs_rx_rings_stats_show(struct seq_file *m, void __attribute
 			rx_desc_stats[i].src_port_inval = stats->src_port_inval;
 			rx_desc_stats[i].src_port_inval_type = stats->src_port_inval_type;
 			rx_desc_stats[i].src_port_inval_netdev = stats->src_port_inval_netdev;
+			memcpy(&rx_desc_stats[i].ring_stats, &stats->ring_stats,
+					sizeof(struct edma_ring_util_stats));
 		} while (u64_stats_fetch_retry_irq(&stats->syncp, start));
 	}
 
@@ -123,9 +145,14 @@ static int edma_debugfs_rx_rings_stats_show(struct seq_file *m, void __attribute
 				i + rx_desc_start_id, rx_desc_stats[i].src_port_inval);
 		seq_printf(m, "\t\t rxdesc[%d]:src_port_inval_type = %llu\n",
 				i + rx_desc_start_id, rx_desc_stats[i].src_port_inval_type);
-		seq_printf(m, "\t\t rxdesc[%d]:src_port_inval_netdev = %llu\n",
+		seq_printf(m, "\t\t rxdesc[%d]:src_port_inval_netdev = %llu\n\n",
 				i + rx_desc_start_id,
 				rx_desc_stats[i].src_port_inval_netdev);
+		seq_printf(m, "\t\t Rx Descriptor ring full utilization stats\n");
+		for (j = 0; j < EDMA_RING_USAGE_MAX_FULL; j++) {
+			 seq_printf(m, "\t\t %s utilized %d times\n", edma_debugfs_ring_usage_dump[j],
+					 rx_desc_stats[i].ring_stats.util[j]);
+		}
 		seq_printf(m, "\n");
 	}
 
@@ -134,11 +161,53 @@ static int edma_debugfs_rx_rings_stats_show(struct seq_file *m, void __attribute
 		seq_printf(m, "\t\tEDMA RX fill %d ring stats:\n", i + rx_fill_start_id);
 		seq_printf(m, "\t\t rxfill[%d]:alloc_failed = %llu\n",
 				i + rx_fill_start_id, rx_fill_stats[i].alloc_failed);
-		seq_printf(m, "\t\t rxfill[%d]:page_alloc_failed = %llu\n",
+		seq_printf(m, "\t\t rxfill[%d]:page_alloc_failed = %llu\n\n",
 				i + rx_fill_start_id, rx_fill_stats[i].page_alloc_failed);
+		seq_printf(m, "\t\t Rx fill ring full utilization stats\n");
+		for (j = 0; j < EDMA_RING_USAGE_MAX_FULL; j++) {
+			seq_printf(m, "\t\t %s utilized %d times\n", edma_debugfs_ring_usage_dump[j],
+					rx_fill_stats[i].ring_stats.util[j]);
+		}
 		seq_printf(m, "\n");
 	}
 
+#ifdef NSS_DP_PPEDS_SUPPORT
+	edma_debugfs_print_banner(m, EDMA_RX_RING_PPEDS_STATS_NODE_NAME);
+
+	for (i = 0; i < drv->num_nodes; i++) {
+		ppeds_node = drv->ppeds_node_cfg[i].ppeds_db;
+		if (!ppeds_node) {
+			continue;
+		}
+
+		rxfill_ring = &ppeds_node->rxfill_ring;
+		seq_printf(m, "\t\t PPE-DS Rx fill ring full utilization stats & Ring id %d\n", rxfill_ring->ring_id);
+
+		for (j = 0; j < EDMA_RING_USAGE_MAX_FULL; j++) {
+			seq_printf(m, "\t\t %s utilized %d times\n", edma_debugfs_ring_usage_dump[j],
+					rxfill_ring->rx_fill_stats.ring_stats.util[j]);
+		}
+
+		seq_printf(m, "\n");
+	}
+
+	for (i = 0; i < drv->num_nodes; i++) {
+		ppeds_node = drv->ppeds_node_cfg[i].ppeds_db;
+		if (!ppeds_node) {
+			continue;
+		}
+
+		rxdesc_ring = &ppeds_node->rx_ring;
+		seq_printf(m, "\t\t PPE-DS Rx desc ring full utilization stats & Ring id %d\n", rxdesc_ring->ring_id);
+
+		for (j = 0; j < EDMA_RING_USAGE_MAX_FULL; j++) {
+			seq_printf(m, "\t\t %s utilized %d times\n", edma_debugfs_ring_usage_dump[j],
+					rxdesc_ring->rx_desc_stats.ring_stats.util[j]);
+		}
+
+		seq_printf(m, "\n");
+	}
+#endif
 	kfree(rx_fill_stats);
 	kfree(rx_desc_stats);
 	return 0;
@@ -155,8 +224,14 @@ static int edma_debugfs_tx_rings_stats_show(struct seq_file *m, void __attribute
 	struct edma_gbl_ctx *egc = &edma_gbl_ctx;
 	uint32_t tx_cmpl_start_id = egc->txcmpl_ring_start;
 	uint32_t tx_desc_start_id = egc->txdesc_ring_start;
-	uint32_t i;
+	uint32_t i, j;
 	unsigned int start;
+#ifdef NSS_DP_PPEDS_SUPPORT
+	struct edma_txdesc_ring *tx_ring;
+	struct edma_txcmpl_ring *txcmpl_ring;
+	struct edma_ppeds_drv *drv = &edma_gbl_ctx.ppeds_drv;
+	struct edma_ppeds *ppeds_node;
+#endif
 
 	tx_cmpl_stats = kzalloc(egc->num_txcmpl_rings * sizeof(struct edma_tx_cmpl_stats), GFP_KERNEL);
 	if (!tx_cmpl_stats) {
@@ -184,6 +259,8 @@ static int edma_debugfs_tx_rings_stats_show(struct seq_file *m, void __attribute
 			start = u64_stats_fetch_begin_irq(&stats->syncp);
 			tx_desc_stats[i].no_desc_avail = stats->no_desc_avail;
 			tx_desc_stats[i].tso_max_seg_exceed = stats->tso_max_seg_exceed;
+			memcpy(&tx_desc_stats[i].ring_stats, &stats->ring_stats,
+			       sizeof(struct edma_ring_util_stats));
 		} while (u64_stats_fetch_retry_irq(&stats->syncp, start));
 	}
 
@@ -226,10 +303,53 @@ static int edma_debugfs_tx_rings_stats_show(struct seq_file *m, void __attribute
 		seq_printf(m, "\t\tEDMA TX descriptor %d ring stats:\n", i + tx_desc_start_id);
 		seq_printf(m, "\t\t txdesc[%d]:no_desc_avail = %llu\n",
 				i + tx_desc_start_id, tx_desc_stats[i].no_desc_avail);
-		seq_printf(m, "\t\t txdesc[%d]:tso_max_seg_exceed = %llu\n",
+		seq_printf(m, "\t\t txdesc[%d]:tso_max_seg_exceed = %llu\n\n",
 				i + tx_desc_start_id, tx_desc_stats[i].tso_max_seg_exceed);
+		seq_printf(m, "\t\t Tx descriptor ring full utilization stats\n");
+		for (j = 0; j < EDMA_RING_USAGE_MAX_FULL; j++) {
+			seq_printf(m, "\t\t %s utilized %d times\n", edma_debugfs_ring_usage_dump[j],
+					tx_desc_stats[i].ring_stats.util[j]);
+		}
 		seq_printf(m, "\n");
 	}
+
+#ifdef NSS_DP_PPEDS_SUPPORT
+	edma_debugfs_print_banner(m, EDMA_TX_RING_PPEDS_STATS_NODE_NAME);
+
+	for (i = 0; i < drv->num_nodes; i++) {
+		ppeds_node = drv->ppeds_node_cfg[i].ppeds_db;
+		if (!ppeds_node) {
+			continue;
+		}
+
+		tx_ring = &ppeds_node->tx_ring;
+		seq_printf(m, "\t\t PPE-DS Tx Ring full utilization stats & Ring id %d\n", tx_ring->id);
+
+		for (j = 0; j < EDMA_RING_USAGE_MAX_FULL; j++) {
+			seq_printf(m, "\t\t %s utilized %d times\n", edma_debugfs_ring_usage_dump[j],
+					tx_ring->tx_desc_stats.ring_stats.util[j]);
+		}
+
+		seq_printf(m, "\n");
+	}
+
+	for (i = 0; i < drv->num_nodes; i++) {
+		ppeds_node = drv->ppeds_node_cfg[i].ppeds_db;
+		if (!ppeds_node) {
+			continue;
+		}
+
+		txcmpl_ring = &ppeds_node->txcmpl_ring;
+		seq_printf(m, "\t\t PPE-DS Tx cmpl Ring full utilization stats & Ring id %d\n", txcmpl_ring->id);
+
+		for (j = 0; j < EDMA_RING_USAGE_MAX_FULL; j++) {
+			seq_printf(m, "\t\t %s utilized %d times\n", edma_debugfs_ring_usage_dump[j],
+					txcmpl_ring->tx_cmpl_stats.ring_stats.util[j]);
+		}
+
+		seq_printf(m, "\n");
+	}
+#endif
 
 	kfree(tx_cmpl_stats);
 	kfree(tx_desc_stats);
@@ -303,6 +423,50 @@ static int edma_debugfs_misc_stats_show(struct seq_file *m, void __attribute__((
 }
 
 /*
+ * edma_debugfs_clear_ring_stats()
+ *      EDMA debugfs clearing the ring stats
+ */
+static int edma_debugfs_clear_ring_stats(struct seq_file *m, void __attribute__((unused))*p)
+{
+	struct edma_gbl_ctx *egc = &edma_gbl_ctx;
+	uint32_t i;
+#ifdef NSS_DP_PPEDS_SUPPORT
+	struct edma_ppeds_drv *drv = &edma_gbl_ctx.ppeds_drv;
+	struct edma_ppeds *ppeds_node;
+#endif
+
+	for (i = 0; i < egc->num_rxfill_rings; i++) {
+		memset(&egc->rxfill_rings[i].rx_fill_stats, 0, sizeof(struct edma_rx_fill_stats));
+	}
+
+	for (i = 0; i < edma_gbl_ctx.num_rxdesc_rings; i++) {
+		memset(&egc->rxdesc_rings[i].rx_desc_stats, 0, sizeof(struct edma_rx_desc_stats));
+	}
+
+
+	for (i = 0; i < egc->num_txdesc_rings; i++) {
+		memset(&egc->txdesc_rings[i].tx_desc_stats, 0, sizeof(struct edma_tx_desc_stats));
+	}
+
+#ifdef NSS_DP_PPEDS_SUPPORT
+	for (i = 0; i < drv->num_nodes; i++) {
+		ppeds_node = drv->ppeds_node_cfg[i].ppeds_db;
+		if (!ppeds_node) {
+			continue;
+		}
+
+		memset(&ppeds_node->rxfill_ring.rx_fill_stats, 0, sizeof(struct edma_rx_fill_stats));
+		memset(&ppeds_node->rx_ring.rx_desc_stats, 0, sizeof(struct edma_rx_desc_stats));
+		memset(&ppeds_node->tx_ring.tx_desc_stats, 0, sizeof(struct edma_tx_desc_stats));
+		memset(&ppeds_node->txcmpl_ring.tx_cmpl_stats, 0, sizeof(struct edma_tx_cmpl_stats));
+	}
+#endif
+
+	seq_printf(m, "Resetting the EDMA Ring stats\n");
+	return 0;
+}
+
+/*
  * edma_debugs_rx_rings_stats_open()
  *	EDMA debugfs Rx rings open callback API
  */
@@ -362,6 +526,25 @@ const struct file_operations edma_debugfs_misc_file_ops = {
 	.release = seq_release
 };
 
+/* edma_debugs_clear_ring_stats()
+ * 	EDMA debugfs clear stats open callback API
+ */
+static int edma_debugs_clear_ring_stats(struct inode *inode, struct file *file)
+{
+	return single_open(file, edma_debugfs_clear_ring_stats, inode->i_private);
+}
+
+/*
+ * edma_debugfs_clear_ring_stats_ops
+ * 	File operations for clearing ring stats
+ */
+const struct file_operations edma_debugfs_clear_ring_stats_ops = {
+	.open = edma_debugs_clear_ring_stats,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = seq_release
+};
+
 /*
  * edma_debugfs_init()
  *	EDMA debugfs init API
@@ -389,6 +572,12 @@ int edma_debugfs_init(void)
 	if (!debugfs_create_file("tx_ring_stats", S_IRUGO, edma_gbl_ctx.stats_dentry,
 			NULL, &edma_debugfs_tx_rings_file_ops)) {
 		edma_err("Unable to create Tx rings statistics file entry in debugfs\n");
+		goto debugfs_dir_failed;
+	}
+
+	if (!debugfs_create_file("clear_ring_stats", S_IRUGO, edma_gbl_ctx.stats_dentry,
+			NULL, &edma_debugfs_clear_ring_stats_ops)) {
+		edma_err("Unable to create clear rings statistics file entry in debugfs\n");
 		goto debugfs_dir_failed;
 	}
 

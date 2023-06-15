@@ -57,6 +57,7 @@ qca-nss-dp-objs += nss_dp_vp_main.o \
 		   hal/dp_ops/edma_dp/edma_v2/edma_dp.o \
 		   hal/dp_ops/edma_dp/edma_v2/edma_dp_vp.o \
 		   hal/dp_ops/edma_dp/edma_v2/edma_misc.o \
+		   hal/dp_ops/edma_dp/edma_v2/edma_procfs.o \
 		   hal/dp_ops/edma_dp/edma_v2/edma_rx.o \
 		   hal/dp_ops/edma_dp/edma_v2/edma_tx.o \
 		   hal/gmac_ops/qcom/qcom_if.o \

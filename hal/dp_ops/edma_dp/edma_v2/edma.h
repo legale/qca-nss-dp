@@ -149,6 +149,16 @@ enum edma_cpu_port_mcast_queues {
 #define EDMA_MISC_TX_TIMEOUT_STATUS_GET(x)		(((x) & EDMA_MISC_TX_TIMEOUT_MASK) >> 7)
 
 /*
+ * EDMA Ring usage stats macro
+ */
+enum edma_ring_usage_percentage {
+	EDMA_RING_USAGE_50_PERCENTAGE = 50,
+	EDMA_RING_USAGE_70_PERCENTAGE = 70,
+	EDMA_RING_USAGE_90_PERCENTAGE = 90,
+	EDMA_RING_USAGE_100_PERCENTAGE = 100,
+};
+
+/*
  * edma_misc_stats
  *	EDMA miscellaneous stats
  */
@@ -315,6 +325,8 @@ struct edma_gbl_ctx {
 #endif
 	uint8_t rx_queue_start;
 			/* Rx queue start */
+	bool enable_ring_util_stats;
+			/* Flag for tracking ring utilization */
 };
 
 extern struct edma_gbl_ctx edma_gbl_ctx;
@@ -343,6 +355,40 @@ static inline uint32_t edma_reg_read(uint32_t reg_off)
 static inline void edma_reg_write(uint32_t reg_off, uint32_t val)
 {
 	hal_write_reg(edma_gbl_ctx.reg_base, reg_off, val);
+}
+
+/*
+ * edma_update_ring_stats
+ *	Update the ring util stats
+ */
+static inline int edma_update_ring_stats(uint32_t work_to_do, uint32_t max_desc,
+					 struct edma_ring_util_stats *ring_util, bool rx_fill)
+{
+	int ring_usage;
+
+	if (rx_fill) {
+		if (work_to_do == 0)
+			ring_util->util[EDMA_RING_USAGE_100_FULL]++;
+		return 0;
+	}
+
+	ring_usage = (100 * work_to_do)/max_desc;
+
+	if (ring_usage == EDMA_RING_USAGE_100_PERCENTAGE) {
+		ring_util->util[EDMA_RING_USAGE_100_FULL]++;
+	} else if (ring_usage > EDMA_RING_USAGE_90_PERCENTAGE) {
+		ring_util->util[EDMA_RING_USAGE_90_TO_100_FULL]++;
+	} else if ((ring_usage > EDMA_RING_USAGE_70_PERCENTAGE) &&
+		  (ring_usage <= EDMA_RING_USAGE_90_PERCENTAGE)) {
+		ring_util->util[EDMA_RING_USAGE_70_TO_90_FULL]++;
+	} else if ((ring_usage > EDMA_RING_USAGE_50_PERCENTAGE) &&
+		  (ring_usage <= EDMA_RING_USAGE_70_PERCENTAGE)) {
+		ring_util->util[EDMA_RING_USAGE_50_TO_70_FULL]++;
+	} else {
+		ring_util->util[EDMA_RING_USAGE_LESS_50_FULL]++;
+	}
+
+	return 0;
 }
 
 #endif	/* __EDMA_H__ */

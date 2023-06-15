@@ -89,12 +89,14 @@ static inline int edma_rx_alloc_buffer_list(struct edma_rxfill_ring *rxfill_ring
 {
 	struct edma_rxfill_desc *rxfill_desc;
 	struct edma_rx_fill_stats *rxfill_stats = &rxfill_ring->rx_fill_stats;
+	struct edma_gbl_ctx *egc = &edma_gbl_ctx;
 	struct list_head rx_skb_alloc;
-	uint16_t prod_idx, start_idx;
+	uint16_t prod_idx, start_idx, cons_idx;
 	uint16_t num_alloc = 0;
+	uint16_t avail_desc = 0;
 	uint32_t rx_alloc_size = rxfill_ring->alloc_size;
 	uint32_t buf_len = rxfill_ring->buf_len;
-	bool page_mode = rxfill_ring->page_mode;
+	bool page_mode = rxfill_ring->page_mode, is_rx_fill = true;
 	INIT_LIST_HEAD(&rx_skb_alloc);
 
 	/*
@@ -102,6 +104,19 @@ static inline int edma_rx_alloc_buffer_list(struct edma_rxfill_ring *rxfill_ring
 	 */
 	prod_idx = rxfill_ring->prod_idx;
 	start_idx = prod_idx;
+
+	/*
+	 * When tracking ring util stats is enabled via procfs,
+	 * we will compute avail desc and compute how much percentage the ring is full.
+	 * Above stats are maintained at ring level.
+	 */
+	if (unlikely(egc->enable_ring_util_stats)) {
+		cons_idx = edma_reg_read(EDMA_REG_RXFILL_CONS_IDX(rxfill_ring->ring_id)) & EDMA_RXFILL_CONS_IDX_MASK;
+		avail_desc = EDMA_DESC_AVAIL_COUNT(prod_idx, cons_idx, EDMA_RX_RING_SIZE);
+
+		edma_update_ring_stats(avail_desc, EDMA_RX_RING_SIZE - EDMA_MAX_COMPUTE,
+				       &rxfill_ring->rx_fill_stats.ring_stats, is_rx_fill);
+	}
 
 	while (likely(alloc_count--)) {
 		struct sk_buff *skb_alloc;
@@ -910,12 +925,21 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 	uint16_t cons_idx_1, cons_idx_2;
 	struct sk_buff *cur_skb = NULL;
 	struct list_head rx_list;
+	bool is_rx_fill = false;
 	INIT_LIST_HEAD(&rx_list);
 
 	/*
 	 * Get Rx ring producer and consumer indices
 	 */
 	cons_idx = rxdesc_ring->cons_idx;
+
+	if (unlikely(egc->enable_ring_util_stats)) {
+		prod_idx = edma_reg_read(EDMA_REG_RXDESC_PROD_IDX(rxdesc_ring->ring_id)) & EDMA_RXDESC_PROD_IDX_MASK;
+		work_to_do = EDMA_DESC_AVAIL_COUNT(prod_idx, cons_idx, EDMA_RX_RING_SIZE);
+
+		edma_update_ring_stats(work_to_do, EDMA_RX_RING_SIZE - EDMA_MAX_COMPUTE,
+				       &rxdesc_ring->rx_desc_stats.ring_stats, is_rx_fill);
+	}
 
 	if (likely(rxdesc_ring->work_leftover > budget)) {
 		work_to_do = budget;

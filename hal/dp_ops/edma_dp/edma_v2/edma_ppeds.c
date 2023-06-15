@@ -176,6 +176,8 @@ static uint32_t edma_ppeds_tx_complete(uint32_t work_to_do, struct edma_txcmpl_r
 	struct edma_txcmpl_desc *txcmpl;
 	uint32_t cons_idx, prod_idx, data, avail;
 	uint16_t count;
+	struct edma_gbl_ctx *egc = &edma_gbl_ctx;
+	bool is_rx_fill = false;
 
 	cons_idx = txcmpl_ring->cons_idx;
 
@@ -188,6 +190,11 @@ static uint32_t edma_ppeds_tx_complete(uint32_t work_to_do, struct edma_txcmpl_r
 	avail = EDMA_DESC_AVAIL_COUNT(prod_idx, cons_idx, txcmpl_ring->count);
 	if (!avail) {
 		return 0;
+	}
+
+	if (unlikely(egc->enable_ring_util_stats)) {
+		edma_update_ring_stats(avail, ppeds_node->txcmpl_ring.count - EDMA_MAX_COMPUTE,
+				       &ppeds_node->txcmpl_ring.tx_cmpl_stats.ring_stats, is_rx_fill);
 	}
 
 	avail = min(avail, work_to_do);
@@ -310,11 +317,18 @@ static int edma_ppeds_rxfill_napi_poll(struct napi_struct *napi, int budget)
 	struct edma_rxfill_ring *rxfill_ring = (struct edma_rxfill_ring *)napi;
 	struct edma_ppeds *ppeds_node = container_of(rxfill_ring, struct edma_ppeds, rxfill_ring);
 	uint32_t alloc_size = rxfill_ring->alloc_size;
+	struct edma_gbl_ctx *egc = &edma_gbl_ctx;
 	uint32_t headroom = EDMA_RX_SKB_HEADROOM + NET_IP_ALIGN;
+	bool is_rx_fill = true;
 
 	cons_idx = edma_reg_read(EDMA_REG_RXFILL_CONS_IDX(rxfill_ring->ring_id)) &
 				EDMA_RXFILL_CONS_IDX_MASK;
 	work_to_do = (cons_idx - rxfill_ring->prod_idx + rxfill_ring->count - 1) & (rxfill_ring->count - 1);
+
+	if (unlikely(egc->enable_ring_util_stats)) {
+		edma_update_ring_stats(work_to_do, rxfill_ring->count - EDMA_MAX_COMPUTE,
+				       &rxfill_ring->rx_fill_stats.ring_stats, is_rx_fill);
+	}
 
 	if (work_to_do > budget) {
 		work_to_do = budget;
@@ -997,8 +1011,19 @@ bool edma_ppeds_get_ppe_queues(nss_dp_ppeds_handle_t *ppeds_handle, uint32_t *pp
 void edma_ppeds_set_tx_prod_idx(nss_dp_ppeds_handle_t *ppeds_handle, uint16_t tx_prod_idx)
 {
 	struct edma_ppeds *ppeds_node = container_of(ppeds_handle, struct edma_ppeds, ppeds_handle);
+	uint32_t cons_idx;
+	struct edma_gbl_ctx *egc = &edma_gbl_ctx;
+	uint32_t work_to_do = 0;
+	bool is_rx_fill = false;
 
 	edma_reg_write(EDMA_REG_TXDESC_PROD_IDX(ppeds_node->tx_ring.id), tx_prod_idx);
+
+	if (unlikely(egc->enable_ring_util_stats)) {
+		cons_idx = edma_reg_read(EDMA_REG_RXDESC_CONS_IDX(ppeds_node->tx_ring.id)) & EDMA_RXDESC_CONS_IDX_MASK;
+		work_to_do = EDMA_DESC_AVAIL_COUNT(tx_prod_idx, cons_idx, ppeds_node->tx_ring.count);
+		edma_update_ring_stats(work_to_do, ppeds_node->tx_ring.count - EDMA_MAX_COMPUTE,
+				       &ppeds_node->tx_ring.tx_desc_stats.ring_stats, is_rx_fill);
+	}
 }
 
 /*
@@ -1008,8 +1033,19 @@ void edma_ppeds_set_tx_prod_idx(nss_dp_ppeds_handle_t *ppeds_handle, uint16_t tx
 void edma_ppeds_set_rx_cons_idx(nss_dp_ppeds_handle_t *ppeds_handle, uint16_t rx_cons_idx)
 {
 	struct edma_ppeds *ppeds_node = container_of(ppeds_handle, struct edma_ppeds, ppeds_handle);
+	uint32_t prod_idx;
+	struct edma_gbl_ctx *egc = &edma_gbl_ctx;
+	uint32_t work_to_do = 0;
+	bool is_rx_fill = false;
 
 	edma_reg_write(EDMA_REG_RXDESC_CONS_IDX(ppeds_node->rx_ring.ring_id), rx_cons_idx);
+
+	if (unlikely(egc->enable_ring_util_stats)) {
+		prod_idx = edma_reg_read(EDMA_REG_RXDESC_PROD_IDX(ppeds_node->rx_ring.ring_id)) & EDMA_RXDESC_PROD_IDX_MASK;
+		work_to_do = EDMA_DESC_AVAIL_COUNT(prod_idx, rx_cons_idx, ppeds_node->rx_ring.count);
+		edma_update_ring_stats(work_to_do, ppeds_node->rx_ring.count - EDMA_MAX_COMPUTE,
+				       &ppeds_node->rx_ring.rx_desc_stats.ring_stats, is_rx_fill);
+	}
 }
 
 /*

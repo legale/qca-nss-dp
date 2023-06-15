@@ -37,6 +37,7 @@
 #include "edma_regs.h"
 #include "edma_debug.h"
 #include "edma_debugfs.h"
+#include "edma_procfs.h"
 #include "nss_dp_dev.h"
 
 /*
@@ -277,6 +278,11 @@ void edma_cleanup(bool is_dp_override)
 	 * Unregister mirror core selection API callback with PPE driver
 	 */
 	ppe_drv_acl_mirror_core_select_unregister_cb();
+
+	/*
+	 * Clean the procfs entries for EDMA ring stats
+	 */
+	edma_procfs_exit();
 
 	/*
 	 * Mark initialize false, so that we do not
@@ -1261,6 +1267,11 @@ int edma_init(void)
 		queue_start = edma_gbl_ctx.rx_ring_queue_map[edma_gbl_ctx.rx_queue_start][i];
 		ppe_drv_core2queue_mapping(i, queue_start);
 	}
+
+	/*
+	 * Initialize the procf entries for enabling EDMA ring stats
+	 */
+	edma_procfs_init();
 
 	return 0;
 

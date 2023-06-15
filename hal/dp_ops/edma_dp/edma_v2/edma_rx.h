@@ -26,6 +26,12 @@
 #define EDMA_RX_SKB_HEADROOM		128
 
 /*
+ * If the ring size is 2048, then the max index in ring will be 2046.
+ * Hence, we will use below macro in computing ring utilisation of a ring in edma_update_ring_stats API
+ */
+#define EDMA_MAX_COMPUTE		2
+
+/*
  * Helper function for generating mask for bit field in a word. This will generate a mask which will
  * enable bits from start to end(both inclusive) of the bit field in a word.
  * For ex: field A extends from 15:8 of a word. here end=15, start=8. This macro generates the mask
@@ -210,6 +216,27 @@
 #define EDMA_RXDESC_SIZE_SHIFT		5
 
 /*
+ * edma_ring_usage
+ *	Indices for stats
+ */
+enum edma_ring_usage {
+	EDMA_RING_USAGE_100_FULL = 0,
+	EDMA_RING_USAGE_90_TO_100_FULL,
+	EDMA_RING_USAGE_70_TO_90_FULL,
+	EDMA_RING_USAGE_50_TO_70_FULL,
+	EDMA_RING_USAGE_LESS_50_FULL,
+	EDMA_RING_USAGE_MAX_FULL,
+};
+
+/*
+ * edma_ring_util_stats
+ *	Structure for tracking ring utilization
+ */
+struct edma_ring_util_stats {
+	uint32_t util[EDMA_RING_USAGE_MAX_FULL];
+};
+
+/*
  * edma_rx_stats
  *	EDMA RX per cpu stats
  */
@@ -232,6 +259,7 @@ struct edma_rx_desc_stats {
 	uint64_t src_port_inval;		/* Invalid source port number */
 	uint64_t src_port_inval_type;		/* Source type is not PORT ID */
 	uint64_t src_port_inval_netdev;		/* Invalid net device for the source port */
+	struct edma_ring_util_stats ring_stats;	/* Tracking EDMA Rx Desc ring utilization */
 	struct u64_stats_sync syncp;		/* Synchronization pointer */
 };
 
@@ -242,6 +270,7 @@ struct edma_rx_desc_stats {
 struct edma_rx_fill_stats {
 	uint64_t alloc_failed;			/* Buffer allocation failure count */
 	uint64_t page_alloc_failed;		/* Page allocation failure count for page mode */
+	struct edma_ring_util_stats ring_stats;    /* Tracking EDMA Rx Fill ring utilization */
 	struct u64_stats_sync syncp;		/* Synchronization pointer */
 };
 

@@ -180,6 +180,7 @@ struct edma_tx_cmpl_stats {
 	uint64_t errors;			/* Other Tx complete descriptor errors indicated by the hardware */
 	uint64_t desc_with_more_bit;		/* Packet's segment transmit count */
 	uint64_t no_pending_desc;		/* No descriptor is pending for processing */
+	struct edma_ring_util_stats ring_stats;    /* Tracking EDMA Tx cmpl ring utilization */
 	struct u64_stats_sync syncp;		/* Synchronization pointer */
 };
 
@@ -190,6 +191,7 @@ struct edma_tx_cmpl_stats {
 struct edma_tx_desc_stats {
 	uint64_t no_desc_avail;			/* No descriptor available to transmit */
 	uint64_t tso_max_seg_exceed;		/* Packets extending EDMA_TX_TSO_SEG_MAX segments */
+	struct edma_ring_util_stats ring_stats;    /* Tracking EDMA Tx ring utilization */
 	struct u64_stats_sync syncp;		/* Synchronization pointer */
 };
 
