@@ -464,7 +464,7 @@ static int nss_dp_open(struct net_device *netdev)
 
 	netif_start_queue(netdev);
 
-	if (!dp_priv->link_poll) {
+	if (!dp_priv->phydev) {
 		/* Notify data plane link is up */
 		if (dp_priv->data_plane_ops->link_state(dp_priv->dpc, 1)) {
 			netdev_dbg(netdev, "Data plane set link failed\n");
@@ -661,6 +661,12 @@ static int32_t nss_dp_of_get_pdata(struct device_node *np,
 		return -EFAULT;
 	}
 
+	dp_priv->phy_node = of_parse_phandle(np, "phy-handle", 0);
+	if (!dp_priv->phy_node) {
+		pr_err("%s: error parsing phy-handle\n", np->name);
+		return -EFAULT;
+	}
+
 	if (of_property_read_u32(np, "qcom,mactype", &hal_pdata->mactype)) {
 		pr_err("%s: error reading mactype\n", np->name);
 		return -EFAULT;
@@ -680,18 +686,6 @@ static int32_t nss_dp_of_get_pdata(struct device_node *np,
 	if (of_get_phy_mode(np, &dp_priv->phy_mii_type))
 		return -EFAULT;
 #endif
-
-	dp_priv->link_poll = of_property_read_bool(np, "qcom,link-poll");
-	if (of_property_read_u32(np, "qcom,phy-mdio-addr",
-		&dp_priv->phy_mdio_addr) && dp_priv->link_poll) {
-		pr_err("%s: mdio addr required if link polling is enabled\n",
-				np->name);
-		return -EFAULT;
-	}
-
-	of_property_read_u32(np, "qcom,forced-speed", &dp_priv->forced_speed);
-	of_property_read_u32(np, "qcom,forced-duplex", &dp_priv->forced_duplex);
-
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 	maddr = (uint8_t *)of_get_mac_address(np);
@@ -781,56 +775,6 @@ static int32_t nss_dp_of_get_pdata(struct device_node *np,
 	return 0;
 }
 
-/*
- * nss_dp_mdio_attach()
- */
-static struct mii_bus *nss_dp_mdio_attach(struct platform_device *pdev)
-{
-	struct device_node *mdio_node;
-	struct platform_device *mdio_plat;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0))
-	struct ipq40xx_mdio_data *mdio_data;
-#endif
-
-	/*
-	 * Find mii_bus using "mdio-bus" handle.
-	 */
-	mdio_node = of_parse_phandle(pdev->dev.of_node, "mdio-bus", 0);
-	if (mdio_node) {
-		return of_mdio_find_bus(mdio_node);
-	}
-
-	mdio_node = of_find_compatible_node(NULL, NULL, "qcom,qca-mdio");
-	if (!mdio_node) {
-		mdio_node = of_find_compatible_node(NULL, NULL,
-							"qcom,ipq40xx-mdio");
-		if (!mdio_node) {
-			dev_err(&pdev->dev, "cannot find mdio node by phandle\n");
-			return NULL;
-		}
-	}
-
-	mdio_plat = of_find_device_by_node(mdio_node);
-	if (!mdio_plat) {
-		dev_err(&pdev->dev, "cannot find platform device from mdio node\n");
-		of_node_put(mdio_node);
-		return NULL;
-	}
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0))
-	return dev_get_drvdata(&mdio_plat->dev);
-#else
-	mdio_data = dev_get_drvdata(&mdio_plat->dev);
-	if (!mdio_data) {
-		dev_err(&pdev->dev, "cannot get mii bus reference from device data\n");
-		of_node_put(mdio_node);
-		return NULL;
-	}
-
-	return mdio_data->mii_bus;
-#endif
-}
-
 #ifdef CONFIG_NET_SWITCHDEV
 /*
  * nss_dp_is_phy_dev()
@@ -889,7 +833,6 @@ static int32_t nss_dp_probe(struct platform_device *pdev)
 	struct device_node *np = pdev->dev.of_node;
 	struct nss_gmac_hal_platform_data gmac_hal_pdata;
 	int32_t ret = 0;
-	uint8_t phy_id[MII_BUS_ID_SIZE + 3];
 #if defined(NSS_DP_PPE_SUPPORT)
 	uint32_t vsi_id;
 	fal_port_t port_id;
@@ -968,22 +911,16 @@ static int32_t nss_dp_probe(struct platform_device *pdev)
 
 	dp_priv->drv_flags |= NSS_DP_PRIV_FLAG(INIT_DONE);
 
-	if (dp_priv->link_poll) {
-		dp_priv->miibus = nss_dp_mdio_attach(pdev);
-		if (!dp_priv->miibus) {
-			netdev_dbg(netdev, "failed to find miibus\n");
-			goto phy_setup_fail;
-		}
-		snprintf(phy_id, MII_BUS_ID_SIZE + 3, PHY_ID_FMT,
-				dp_priv->miibus->id, dp_priv->phy_mdio_addr);
+	if (dp_priv->phy_node) {
 
-		dp_priv->phydev = phy_connect(netdev, phy_id,
-				&nss_dp_adjust_link,
-				dp_priv->phy_mii_type);
-		if (IS_ERR(dp_priv->phydev)) {
-			netdev_dbg(netdev, "failed to connect to phy device\n");
-			goto phy_setup_fail;
-		}
+		dp_priv->phydev = of_phy_connect(netdev, dp_priv->phy_node,
+		        &nss_dp_adjust_link, 0,
+		        dp_priv->phy_mii_type);
+		if (!(dp_priv->phydev)) {
+			netdev_err(netdev, "failed to connect to phy device\n");
+ 			goto phy_setup_fail;
+ 		}
+ 		phy_attached_info(dp_priv->phydev);
 	}
 
 #if defined(NSS_DP_PPE_SUPPORT)
