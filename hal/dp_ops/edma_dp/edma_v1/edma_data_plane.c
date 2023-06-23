@@ -279,7 +279,7 @@ int edma_init(void)
 	/*
 	 * Remap register resource
 	 */
-	edma_hw.reg_base = ioremap_nocache((edma_hw.reg_resource)->start,
+	edma_hw.reg_base = ioremap((edma_hw.reg_resource)->start,
 				resource_size(edma_hw.reg_resource));
 	if (!edma_hw.reg_base) {
 		pr_warn("Unable to remap EDMA register memory.\n");

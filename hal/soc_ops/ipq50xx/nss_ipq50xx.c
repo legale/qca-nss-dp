@@ -89,7 +89,7 @@ static void nss_dp_hal_tcsr_set(void)
 			pr_err("%s: SCM TCSR write error: %d\n", __func__, err);
 		}
 	} else {
-		tcsr_addr = ioremap_nocache((tcsr_base + TCSR_GMAC_AXI_CACHE_OVERRIDE_OFFSET),
+		tcsr_addr = ioremap((tcsr_base + TCSR_GMAC_AXI_CACHE_OVERRIDE_OFFSET),
 						TCSR_GMAC_AXI_CACHE_OVERRIDE_REG_SIZE);
 		if (!tcsr_addr) {
 			pr_err("%s: ioremap failed\n", __func__);
