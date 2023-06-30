@@ -445,9 +445,9 @@ static int edma_dp_init(struct nss_dp_data_plane_ctx *dpc)
 
 	if (dp_dev->macid < NSS_DP_VP_MAC_ID) {
 		/*
-		* Allocate PPE interface global object which will hold various information
-		* about the port allocated in a single global structure.
-		*/
+		 * Allocate PPE interface global object which will hold various information
+		 * about the port allocated in a single global structure.
+		 */
 		iface = ppe_drv_iface_alloc(PPE_DRV_IFACE_TYPE_PHYSICAL, netdev);
 		if (!iface) {
 			netdev_err(netdev, "Error allocating PPE interface for dev(%p) dev-name %s\n",
@@ -458,11 +458,21 @@ static int edma_dp_init(struct nss_dp_data_plane_ctx *dpc)
 		}
 
 		/*
-		* Initialize port allocated in PPE
-		*/
+		 * Initialize port allocated in PPE
+		 */
 		if (ppe_drv_dp_init(iface, dp_dev->macid) != PPE_DRV_RET_SUCCESS) {
 			netdev_err(netdev, "Error allocating PPE interface for dev(%p) dev-name %s\n",
 					netdev, netdev->name);
+			ppe_drv_iface_deref(iface);
+			free_percpu(dp_dev->dp_info.pcpu_stats.rx_stats);
+			free_percpu(dp_dev->dp_info.pcpu_stats.tx_stats);
+			return NSS_DP_FAILURE;
+		}
+
+		if (ppe_drv_dp_set_ppe_offload_enable_flag(iface, dp_dev->ppe_offload_disabled)) {
+			netdev_err(netdev, "Error setting PPE offload enabled bit for dev: %s",
+					netdev->name);
+			ppe_drv_dp_deinit(iface);
 			ppe_drv_iface_deref(iface);
 			free_percpu(dp_dev->dp_info.pcpu_stats.rx_stats);
 			free_percpu(dp_dev->dp_info.pcpu_stats.tx_stats);

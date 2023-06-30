@@ -692,6 +692,9 @@ static int32_t nss_dp_of_get_pdata(struct device_node *np,
 	}
 #endif
 
+	dp_priv->ppe_offload_disabled = of_property_read_bool(np, "qcom,ppe-offload-disabled");
+	pr_info("%s: ppe offload disabled: %d for macid %d\n", np->name,
+				dp_priv->ppe_offload_disabled, dp_priv->macid);
 	return 0;
 }
 

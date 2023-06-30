@@ -238,6 +238,7 @@ struct nss_dp_dev {
 #ifdef NSS_DP_ETHTOOL_MRR_OPS
 	uint32_t ethtool_priv_flags;	/* Ethtool private flags */
 #endif /* NSS_DP_ETHTOOL_MRR_OPS */
+	bool ppe_offload_disabled;
 };
 
 /*
