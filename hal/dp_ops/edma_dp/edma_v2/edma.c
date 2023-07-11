@@ -1083,7 +1083,14 @@ static struct ctl_table edma_sub[] = {
 		.data		=	&edma_cfg_rx_rps_num_cores,
 		.maxlen		=	sizeof(int),
 		.mode		=	0644,
-		.proc_handler	=	edma_cfg_rx_rps
+		.proc_handler	=	edma_cfg_rx_rps,
+	},
+	{
+		.procname	=	"edma_sec_desc_feature_enable",
+		.data		=	&edma_cfg_rx_sec_desc_inval,
+		.maxlen		=	sizeof(int),
+		.mode		=	0644,
+		.proc_handler	=	edma_cfg_rx_inval,
 	},
 	{}
 };

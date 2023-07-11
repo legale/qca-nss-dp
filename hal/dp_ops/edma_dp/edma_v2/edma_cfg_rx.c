@@ -31,6 +31,7 @@
 uint32_t edma_cfg_rx_fc_enable = EDMA_RX_FC_ENABLE;
 uint32_t edma_cfg_rx_queue_tail_drop_enable = EDMA_RX_QUEUE_TAIL_DROP_ENABLE;
 uint32_t edma_cfg_rx_rps_num_cores = NR_CPUS;
+uint32_t edma_cfg_rx_sec_desc_inval = 0;
 
 /*
  * Rx ring queue offset
@@ -1512,6 +1513,31 @@ int edma_cfg_rx_queue_tail_drop_handler(struct ctl_table *table, int write,
 					edma_cfg_rx_queue_tail_drop_enable);
 	}
 
+	return ret;
+}
+
+/*
+ * edma_cfg_rx_inval()
+ *	Invalidate the secondary descriptor.
+ */
+int edma_cfg_rx_inval(struct ctl_table *table, int write,
+		void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	int ret;
+
+	ret = proc_dointvec(table, write, buffer, lenp, ppos);
+
+	if (!write) {
+		return ret;
+	}
+
+	if ((edma_cfg_rx_sec_desc_inval != 0) && (edma_cfg_rx_sec_desc_inval != 1)) {
+		edma_err("Incorrect inval value: %d. Setting it to default"
+			       " value: %d", edma_cfg_rx_sec_desc_inval, 0);
+		edma_cfg_rx_sec_desc_inval = 0;
+	}
+
+	edma_warn("EDMA secondary descriptor invalidation option set to %d \n", edma_cfg_rx_sec_desc_inval);
 	return ret;
 }
 

@@ -23,6 +23,7 @@
 #include <nss_dp_vp.h>
 #include <linux/phy.h>
 #include "edma.h"
+#include "edma_cfg_rx.h"
 #include "edma_debug.h"
 #include "edma_regs.h"
 #include "nss_dp_dev.h"
@@ -360,9 +361,13 @@ static inline bool edma_rx_handle_sc_cc_packets(struct edma_gbl_ctx *egc,
 
 		/*
 		 * Invalidate the secondary descriptor before using its fields.
-		 * TODO: Optimize the invalidation of secondary descriptor.
+		 * TODO:
+		 * 1. Optimize the invalidation of secondary descriptor.
+		 * 2. Remove the sysctl protecting invalidation.
 		 */
-		dmac_inv_range((void *)rxdesc_sec, (void *)(rxdesc_sec + 1));
+		if (unlikely(edma_cfg_rx_sec_desc_inval)) {
+			dmac_inv_range((void *)rxdesc_sec, (void *)(rxdesc_sec + 1));
+		}
 
 		cpu_code = EDMA_RXDESC_CPU_CODE_GET(rxdesc_sec);
 
