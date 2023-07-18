@@ -780,6 +780,35 @@ static void edma_cfg_rx_point_offload_rings_to_rx_fill_mapping(struct edma_gbl_c
 #endif
 
 /*
+ * edma_cfg_rx_mcast_qid_to_core_mapping
+ *	Configure mcast queue to core mapping.
+ */
+void edma_cfg_rx_mcast_qid_to_core_mapping(struct edma_gbl_ctx *egc, uint8_t core_id)
+{
+	uint32_t desc_index, q_id;
+	uint32_t reg_index, data;
+
+	/*
+	 * Map PPE multicast queues to the Rx ring according to the core.
+	 */
+	desc_index = egc->rxdesc_ring_map[0][core_id];
+	for (q_id = EDMA_CPU_PORT_MCAST_QUEUE_START;
+		q_id <= EDMA_CPU_PORT_MCAST_QUEUE_END;
+			q_id += EDMA_QID2RID_NUM_PER_REG) {
+		reg_index = q_id/EDMA_QID2RID_NUM_PER_REG;
+		data = EDMA_RX_RING_ID_QUEUE0_SET(desc_index) |
+			EDMA_RX_RING_ID_QUEUE1_SET(desc_index) |
+			EDMA_RX_RING_ID_QUEUE2_SET(desc_index) |
+			EDMA_RX_RING_ID_QUEUE3_SET(desc_index);
+
+		edma_reg_write(EDMA_QID2RID_TABLE_MEM(reg_index), data);
+
+		edma_info("Configure QID2RID(%d) reg:0x%x to 0x%x\n",
+				q_id, EDMA_QID2RID_TABLE_MEM(reg_index), data);
+	}
+}
+
+/*
  * edma_cfg_rx_qid_to_rx_desc_ring_mapping()
  *	Configure PPE queue id to Rx ring mapping
  */
