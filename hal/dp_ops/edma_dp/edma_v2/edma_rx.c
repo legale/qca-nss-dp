@@ -48,8 +48,11 @@ static inline void edma_rx_process_vp(struct edma_rxdesc_desc *rxdesc_desc, stru
 		struct nss_dp_dev *vp_dev;
 
 		rcu_read_unlock();
-		edma_warn("Vp packet recieved but edma vp callback \
-				not registered yet, skb:%px\n", skb);
+		if (net_ratelimit()) {
+			edma_warn("VP packet recieved but edma vp callback \
+					not registered yet, skb:%px\n", skb);
+		}
+
 		vp_dev = netdev_priv(skb->dev);
 		dev_kfree_skb_any(skb);
 
@@ -877,7 +880,7 @@ done:
 
 	if (net_ratelimit()) {
 		edma_warn("Netdev Null src_info_type:0x%x. Drop skb:%px\n",
-			src_port_num, skb);
+				src_port_num, skb);
 	}
 
 	u64_stats_update_begin(&rxdesc_stats->syncp);
