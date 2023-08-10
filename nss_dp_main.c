@@ -821,6 +821,8 @@ static int32_t nss_dp_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
+	SET_NETDEV_DEV(netdev, &pdev->dev);
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0))
 	/* max_mtu is set to 1500 in ether_setup() */
 	netdev->max_mtu = ETH_MAX_MTU;
@@ -891,8 +893,6 @@ static int32_t nss_dp_probe(struct platform_device *pdev)
 		}
 		snprintf(phy_id, MII_BUS_ID_SIZE + 3, PHY_ID_FMT,
 				dp_priv->miibus->id, dp_priv->phy_mdio_addr);
-
-		SET_NETDEV_DEV(netdev, &pdev->dev);
 
 		dp_priv->phydev = phy_connect(netdev, phy_id,
 				&nss_dp_adjust_link,
