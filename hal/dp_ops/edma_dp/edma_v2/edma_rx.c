@@ -350,7 +350,9 @@ static inline bool edma_rx_handle_sc_cc_packets(struct edma_gbl_ctx *egc,
 	uint16_t desc_index, next_desc_index;
 	uint32_t dst_port;
 	uint8_t cpu_code, service_code;
+	bool acl_info_valid = false;
 	struct edma_rxdesc_sec_desc *rxdesc_sec, *next_rxdesc_sec;
+	struct ppe_drv_cc_metadata cc_info = {0};
 	struct ppe_drv_sc_metadata sc_info = {0};
 	struct ppe_drv_acl_metadata acl_info = {0};
 
@@ -384,23 +386,17 @@ static inline bool edma_rx_handle_sc_cc_packets(struct edma_gbl_ctx *egc,
 		prefetch(next_rxdesc_sec);
 
 		/*
-		 * check if the ACL ID is valid or not, if yes,
-		 * first process the packet based on ACL ID and then look
-		 * for CPU code processing.
+		 * Get the ACL id from EDMA secondary descriptor as well.
 		 */
 		if (unlikely(EDMA_RXDESC_ACL_IDX_VALID_GET(rxdesc_sec))) {
 			acl_info.acl_hw_index = EDMA_RXDESC_ACL_IDX_GET(rxdesc_sec);
 			acl_info.cpu_code = cpu_code;
-			if (ppe_drv_acl_process_skbuff(&acl_info, skb)) {
-				return true;
-			}
+			acl_info_valid = true;
+			cc_info.acl_hw_index = acl_info.acl_hw_index;
 		}
 
-		/*
-		 * In case if ACL based processing returns false, continue with the
-		 * CPU code process.
-		 */
-		if (cpu_code && ppe_drv_cc_process_skbuff(cpu_code, skb)) {
+		cc_info.cpu_code = cpu_code;
+		if (cpu_code && ppe_drv_cc_process_skbuff(&cc_info, skb)) {
 			return true;
 		}
 	}
@@ -425,6 +421,17 @@ static inline bool edma_rx_handle_sc_cc_packets(struct edma_gbl_ctx *egc,
 		 * Serivce codes can return true / false based on the callbacks registered to them.
 		 */
 		if (unlikely(ppe_drv_sc_process_skbuff(&sc_info, skb))) {
+			return true;
+		}
+	}
+
+	/*
+	 * check if the ACL ID is valid or not, if yes,
+	 * process the packet based on ACL ID post CPU and service code
+	 * processing is done.
+	 */
+	if (unlikely(acl_info_valid)) {
+		if (ppe_drv_acl_process_skbuff(&acl_info, skb)) {
 			return true;
 		}
 	}
