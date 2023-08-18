@@ -36,6 +36,10 @@ ifeq ($(SoC),$(filter $(SoC),ipq60xx))
 ccflags-y += -DNSS_DP_IPQ60XX
 endif
 
+ifeq ($(SoC),$(filter $(SoC),ipq53xx))
+ccflags-y += -DNSS_DP_MHT_SW_PORT_MAP
+endif
+
 ifeq ($(SoC),$(filter $(SoC),ipq50xx))
 qca-nss-dp-objs += hal/dp_ops/syn_gmac_dp/syn_dp_cfg_rx.o \
 		   hal/dp_ops/syn_gmac_dp/syn_dp_cfg_tx.o \

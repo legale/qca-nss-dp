@@ -28,6 +28,57 @@
 #include "edma_regs.h"
 #include "edma_debug.h"
 
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+/*
+ * edma_cfg_tx_set_mht_mdio_slv_pause()
+ *	Set the MDIO_SLV pause mapping to VP_PORTS
+ */
+void edma_cfg_tx_set_mht_mdio_slv_pause(struct edma_gbl_ctx *egc)
+{
+	uint32_t data_reg_0 = 0;
+	uint32_t data_reg_1 = 0;
+	uint32_t id1;
+	uint32_t id2;
+
+	for (id1 = 0; id1 < EDMA_GLOBAL_MDIO_SLV_PAUSE_ID_REG0_MAX; id1++)
+		data_reg_0 |= EDMA_GLOBAL_MDIO_SLV_PAUSE_ID_MAP_VPPORT(
+				(id1 & EDMA_GLOBAL_MDIO_SLV_VPPORTS_MAX), id1);
+
+	for (id2 = 0; id2 < EDMA_GLOBAL_MDIO_SLV_PAUSE_ID_REG1_MAX; id2++) {
+		data_reg_1 |= EDMA_GLOBAL_MDIO_SLV_PAUSE_ID_MAP_VPPORT(
+				(id1 & EDMA_GLOBAL_MDIO_SLV_VPPORTS_MAX), id2);
+		id1++;
+	}
+	edma_reg_write(EDMA_MDIO_SLV_PASUE_MAP_0, data_reg_0);
+	edma_reg_write(EDMA_MDIO_SLV_PASUE_MAP_1, data_reg_1);
+}
+
+/*
+ * edma_cfg_tx_set_max_ports()
+ *	Configure EDMA Tx max ports
+ */
+void edma_cfg_tx_set_max_ports(struct edma_gbl_ctx *egc)
+{
+	/*
+	 * Max ports include all MHT switch ports when module param
+	 * nss_dp_mht_multi_txring is enabled.
+	 * Max ports is Individual ports + MHT SWT ports
+	 *
+	 */
+	if (dp_global_ctx.is_mht_dev) {
+		egc->max_tx_ports = NSS_DP_HAL_MAX_TX_PORTS;
+		return;
+	}
+
+	/*
+	 * Max ports equals Individual ports +
+	 *		SWT port(single port represents switch) +
+	 * 		VP ports
+	 */
+	egc->max_tx_ports = NSS_DP_MAX_PORTS;
+}
+#endif
+
 /*
  * edma_cfg_tx_cmpl_ring_cleanup()
  *	Cleanup resources for one TxCmpl ring
@@ -282,17 +333,39 @@ void edma_cfg_tx_cmpl_mapping_fill(struct edma_gbl_ctx *egc)
 void edma_cfg_tx_fill_per_port_tx_map(struct net_device *netdev, uint32_t macid)
 {
 	uint32_t i;
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+	uint32_t sw_port, j;
+#endif
+	struct nss_dp_dev *dp_dev = (struct nss_dp_dev *)netdev_priv(netdev);
+	uint32_t txdesc_start = edma_gbl_ctx.txdesc_ring_start;
+	struct edma_txdesc_ring *txdesc_ring;
+	uint32_t txdesc_ring_id;
 
 	for_each_possible_cpu(i) {
-		struct nss_dp_dev *dp_dev = (struct nss_dp_dev *)netdev_priv(netdev);
-		struct edma_txdesc_ring *txdesc_ring;
-		uint32_t txdesc_ring_id;
-		uint32_t txdesc_start = edma_gbl_ctx.txdesc_ring_start;
 
 		txdesc_ring_id = edma_gbl_ctx.tx_map[nss_dp_get_idx_from_macid(macid)][i];
 		txdesc_ring = &edma_gbl_ctx.txdesc_rings[txdesc_ring_id - txdesc_start];
 		dp_dev->dp_info.txr_map[0][i] = txdesc_ring;
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+		if (dp_dev->nss_dp_mht_dev)
+			dp_dev->dp_info.txr_sw_port_map[0][i] = txdesc_ring;
+#endif
 	}
+
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+	if (!dp_dev->nss_dp_mht_dev)
+		return;
+
+	sw_port = 1;
+	for (i = NSS_DP_HAL_MAX_PORTS; i < edma_gbl_ctx.max_tx_ports; i++) {
+		for_each_possible_cpu(j) {
+			txdesc_ring_id = edma_gbl_ctx.tx_map[i][j];
+			txdesc_ring = &edma_gbl_ctx.txdesc_rings[txdesc_ring_id - txdesc_start];
+			dp_dev->dp_info.txr_sw_port_map[sw_port][j] = txdesc_ring;
+		}
+		sw_port++;
+	}
+#endif
 }
 
 /*
@@ -459,12 +532,20 @@ void edma_cfg_tx_point_offload_mapping(struct edma_gbl_ctx *egc)
 static int edma_cfg_tx_rings_setup(struct edma_gbl_ctx *egc)
 {
 	uint32_t i, j = 0;
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+	uint32_t edma_max_gmac = egc->max_tx_ports;
 
 	/*
 	 * Set Txdesc flow control group id
 	 * Note: Only valid for HAL Ports. Not valid for dummy ports
+	 * Mapping is done for MAX GMAC ports, VP ports needs to be excluded.
 	 */
-	for (i = 0; i < EDMA_MAX_GMACS; i++) {
+	if (!dp_global_ctx.is_mht_dev)
+		edma_max_gmac = egc->max_tx_ports - NSS_DP_VP_HAL_MAX_PORTS;
+#else
+	uint32_t edma_max_gmac = EDMA_MAX_GMACS;
+#endif
+	for (i = 0; i < edma_max_gmac; i++) {
 		for_each_possible_cpu(j) {
 			struct edma_txdesc_ring *txdesc_ring = NULL;
 			uint32_t txdesc_idx = egc->tx_map[i][j]
@@ -705,6 +786,9 @@ void edma_cfg_tx_napi_add(struct edma_gbl_ctx *egc, struct net_device *netdev, u
 	uint32_t i;
 	uint32_t index, ring_idx;
 	struct edma_txcmpl_ring *txcmpl_ring;
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+	struct nss_dp_dev *dp_dev = (struct nss_dp_dev *)netdev_priv(netdev);
+#endif
 
 	if ((nss_dp_tx_napi_budget < EDMA_TX_NAPI_WORK_MIN) ||
 		(nss_dp_tx_napi_budget > EDMA_TX_NAPI_WORK_MAX)) {
@@ -720,6 +804,11 @@ void edma_cfg_tx_napi_add(struct edma_gbl_ctx *egc, struct net_device *netdev, u
 	for_each_possible_cpu(i) {
 		ring_idx = egc->txcmpl_map[index][i] - egc->txcmpl_ring_start;
 		txcmpl_ring = &egc->txcmpl_rings[ring_idx];
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+		if (txcmpl_ring->napi_added) {
+			continue;
+		}
+#endif
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 		netif_napi_add(netdev, &txcmpl_ring->napi,
@@ -731,5 +820,32 @@ void edma_cfg_tx_napi_add(struct edma_gbl_ctx *egc, struct net_device *netdev, u
 		txcmpl_ring->napi_added = true;
 		edma_debug("Napi added for txcmpl ring: %u\n", txcmpl_ring->id);
 	}
+
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+	if (!dp_dev->nss_dp_mht_dev)
+		goto done;
+
+	for (index = NSS_DP_MHT_MAP_IDX; index < egc->max_tx_ports; index++) {
+		for_each_possible_cpu(i) {
+			ring_idx = egc->txcmpl_map[index][i] -
+					egc->txcmpl_ring_start;
+			txcmpl_ring = &egc->txcmpl_rings[ring_idx];
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
+			netif_napi_add(netdev, &txcmpl_ring->napi,
+					edma_tx_napi_poll,
+					nss_dp_tx_napi_budget);
+#else
+			netif_napi_add_weight(netdev, &txcmpl_ring->napi,
+					edma_tx_napi_poll,
+					nss_dp_tx_napi_budget);
+#endif
+			txcmpl_ring->napi_added = true;
+			edma_debug("Napi added for txcmpl ring: %u\n",
+					txcmpl_ring->id);
+		}
+	}
+done:
+#endif
 	edma_info("Tx NAPI budget: %d\n", nss_dp_tx_napi_budget);
 }

@@ -35,6 +35,20 @@ netdev_tx_t edma_dp_vp_xmit(struct nss_dp_data_plane_ctx *dpc, struct nss_dp_vp_
 	enum edma_tx_gso result;
 	int ret;
 
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+	/*
+	 * Drop the packets received on vp port
+	 * when mht per port Tx ring mapping is enabled.
+	 */
+	if (dp_dev->nss_dp_mht_dev) {
+		dev_kfree_skb_any(skb);
+		u64_stats_update_begin(&stats->syncp);
+		++stats->tx_drops;
+		u64_stats_update_end(&stats->syncp);
+		return NETDEV_TX_OK;
+	}
+#endif
+
 	/*
 	 * Select a TX ring based on current core
 	 */

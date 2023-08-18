@@ -24,6 +24,15 @@
 #define NSS_DP_HAL_START_IFNUM		1
 
 /*
+ * TX maximum supported ports
+ */
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+#define NSS_DP_HAL_MHT_SWT_MAX_PORTS	4
+#define NSS_DP_HAL_MAX_TX_PORTS		(NSS_DP_HAL_MAX_PORTS + NSS_DP_HAL_MHT_SWT_MAX_PORTS - 1)
+#define NSS_DP_MHT_MAP_IDX		2
+#endif
+
+/*
  * Maximum supported GSO segments
  */
 #define NSS_DP_HAL_GSO_MAX_SEGS		GSO_MAX_SEGS
