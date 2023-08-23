@@ -43,8 +43,10 @@ uint32_t edma_tx_complete(uint32_t work_to_do, struct edma_txcmpl_ring *txcmpl_r
 	struct sk_buff_head h;
 	uint32_t txcmpl_errors;
 	uint32_t avail, count;
+	uint8_t cpu_id;
 	uint32_t end_idx;
 	uint32_t more_bit = 0;
+	struct netdev_queue *nq;
 
 	cons_idx = txcmpl_ring->cons_idx;
 
@@ -180,6 +182,22 @@ uint32_t edma_tx_complete(uint32_t work_to_do, struct edma_txcmpl_ring *txcmpl_r
 	edma_debug("TXCMPL:%u count:%u prod_idx:%u cons_idx:%u\n",
 			txcmpl_ring->id, count, prod_idx, cons_idx);
 	edma_reg_write(EDMA_REG_TXCMPL_CONS_IDX(txcmpl_ring->id), cons_idx);
+
+	/*
+	 * If tx_requeue_stop disabled (tx_requeue_stop = 0)
+	 * Fetch the tx queue of interface and check if it is stopped.
+	 * if queue is stopped and interface is up, wake up this queue.
+	 */
+	if (likely(!dp_global_ctx.tx_requeue_stop)) {
+		cpu_id = smp_processor_id();
+		nq = netdev_get_tx_queue(txcmpl_ring->napi.dev, cpu_id);
+		if (unlikely(netif_tx_queue_stopped(nq)) && netif_carrier_ok(txcmpl_ring->napi.dev)) {
+			edma_debug("Waking queue number %d, for interface %s\n", cpu_id, txcmpl_ring->napi.dev->name);
+			__netif_tx_lock(nq, cpu_id);
+			netif_tx_wake_queue(nq);
+			__netif_tx_unlock(nq);
+		}
+	}
 
 	return count;
 }
