@@ -124,12 +124,19 @@ static int edma_dp_mac_addr(struct nss_dp_data_plane_ctx *dpc, uint8_t *addr)
 static int edma_dp_change_mtu(struct nss_dp_data_plane_ctx *dpc, uint32_t mtu)
 {
 	struct ppe_drv_iface *iface = ppe_drv_iface_get_by_dev(dpc->dev);
+	ppe_drv_ret_t ret;
+
 	if (!iface) {
 		netdev_dbg(dpc->dev, "cannot get iface for corresponding netdev:%p\n", dpc->dev);
 		return NSS_DP_SUCCESS;
 	}
 
-	ppe_drv_iface_mtu_set(iface, mtu);
+	ret = ppe_drv_iface_mtu_set(iface, mtu);
+
+	if (ret != PPE_DRV_RET_SUCCESS) {
+		netdev_dbg(dpc->dev, "MTU %d is not supported:%p\n", mtu, dpc->dev);
+		return NSS_DP_FAILURE;
+	}
 
 	return NSS_DP_SUCCESS;
 }
