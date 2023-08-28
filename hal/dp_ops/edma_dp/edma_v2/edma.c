@@ -31,6 +31,7 @@
 #include <ppe_drv_acl.h>
 #include <ppe_drv.h>
 #include <linux/clk.h>
+#include <linux/cpumask.h>
 #include "edma.h"
 #include "edma_cfg_tx.h"
 #include "edma_cfg_rx.h"
@@ -883,26 +884,34 @@ static sw_error_t edma_configure_ucast_prio_map_tbl(void)
  * edma_configure_rps_hash_map()
  *	Configure RPS hash map
  *
- * Map all possible hash values to queues used by the EDMA
- * Rx rings in a round robin fashion. These queues are expected
- * to be mapped to different Rx rings which are assigned to different
- * cores using IRQ affinity configuration.
+ * Map all possible hash values to queues used by the EDMA Rx
+ * rings based on a bitmask, which represents the cores to be mapped.
+ * These queues are expected to be mapped to different Rx rings
+ * which are assigned to different cores using IRQ affinity configuration.
  */
 void edma_configure_rps_hash_map(struct edma_gbl_ctx *egc)
 {
-	uint32_t hash = 0;
+	cpumask_t edma_rps_cpumask = {{edma_cfg_rx_rps_bitmap_cores}};
+	uint32_t q_map[NR_CPUS] = {0};
+	uint32_t hash, cpu;
 	uint32_t q_off = egc->rx_queue_start;
+	int map_len = 0;
+	int idx = 0;
+
+	for_each_cpu(cpu, &edma_rps_cpumask) {
+		q_map[map_len] = q_off + (cpu * EDMA_MAX_PRI_PER_CORE);
+		map_len++;
+	}
 
 	/*
+	 * Based on set bit positon we have selected cores.
 	 * Initialize the store
 	 */
 	for (hash = 0; hash < EDMA_RSS_HASH_MAX; hash++) {
-		fal_ucast_hash_map_set(0, EDMA_CPU_PORT_PROFILE_ID, hash, q_off);
+		fal_ucast_hash_map_set(0, EDMA_CPU_PORT_PROFILE_ID, hash, q_map[idx]);
 		edma_info("profile_id: %u, hash: %u, q_off: %u\n",
-				EDMA_CPU_PORT_PROFILE_ID, hash, q_off);
-
-		q_off += EDMA_MAX_PRI_PER_CORE;
-		q_off %= (EDMA_MAX_PRI_PER_CORE * edma_cfg_rx_rps_num_cores);
+				EDMA_CPU_PORT_PROFILE_ID, hash, q_map[idx]);
+		idx = (idx + 1) % map_len;
 	}
 }
 
@@ -1114,6 +1123,13 @@ static struct ctl_table edma_sub[] = {
 		.maxlen		=	sizeof(int),
 		.mode		=	0644,
 		.proc_handler	=	edma_cfg_rx_inval,
+	},
+	{
+		.procname	=	"rps_bitmap_cores",
+		.data		=	&edma_cfg_rx_rps_bitmap_cores,
+		.maxlen		=	sizeof(int),
+		.mode		=	0644,
+		.proc_handler	=	edma_cfg_rx_rps_bitmap
 	},
 	{}
 };

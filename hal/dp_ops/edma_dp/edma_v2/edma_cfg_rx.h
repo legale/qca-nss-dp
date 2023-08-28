@@ -23,6 +23,7 @@
 #define EDMA_RX_NAPI_WORK_MAX		512
 #define EDMA_RX_PAGE_MODE_SKB_SIZE	256	/* SKB payload size used in page mode */
 #define EDMA_RX_DEFAULT_QUEUE_PRI	0
+#define EDMA_RX_DEFAULT_BITMAP		((1 << NR_CPUS) - 1)	/* Bitmap when using 4 cores */
 #define EDMA_RX_FC_ENABLE		1	/* RX flow control default state */
 #define EDMA_RX_QUEUE_TAIL_DROP_ENABLE	0	/* RX queue tail drop configuration default state */
 #define EDMA_RX_FC_XOFF_THRE_MIN	0	/* Rx flow control minimum X-OFF value */
@@ -47,6 +48,7 @@ extern uint32_t edma_cfg_rx_fc_enable;
 extern uint32_t edma_cfg_rx_queue_tail_drop_enable;
 extern uint32_t edma_cfg_rx_rps_num_cores;
 extern uint32_t edma_cfg_rx_sec_desc_inval;
+extern uint32_t edma_cfg_rx_rps_bitmap_cores;
 
 void edma_cfg_rx_rings(struct edma_gbl_ctx *egc);
 #if defined(NSS_DP_POINT_OFFLOAD)
@@ -71,5 +73,7 @@ int edma_cfg_rx_queue_tail_drop_handler(struct ctl_table *table, int write,
 int edma_cfg_rx_inval(struct ctl_table *table, int write,
 		void __user *buffer, size_t *lenp, loff_t *ppos);
 int edma_cfg_rx_rps(struct ctl_table *table, int write,
+		void __user *buffer, size_t *lenp, loff_t *ppos);
+int edma_cfg_rx_rps_bitmap(struct ctl_table *table, int write,
 		void __user *buffer, size_t *lenp, loff_t *ppos);
 #endif	/* __EDMA_CFG_RX_H__ */
