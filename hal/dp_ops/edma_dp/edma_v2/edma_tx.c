@@ -384,6 +384,17 @@ static inline void edma_tx_fill_pp_desc(struct nss_dp_dev *dp_dev, struct edma_p
 				(skb_shinfo(skb)->gso_type == SKB_GSO_TCPV6)){
 			uint32_t mss;
 			mss = skb_shinfo(skb)->gso_size;
+
+			/*
+			 * If MSS<256, HW will do TSO using MSS=256,
+			 * if MSS>10K, HW will do TSO using MSS=10K,
+			 * else HW will report error 0x200000 in Tx Cmpl
+			 */
+			if (mss < EDMA_TX_TSO_MSS_MIN)
+				mss = EDMA_TX_TSO_MSS_MIN;
+			else if (mss > EDMA_TX_TSO_MSS_MAX)
+				mss = EDMA_TX_TSO_MSS_MAX;
+
 			EDMA_TXDESC_TSO_ENABLE_SET(txd, 1);
 			EDMA_TXDESC_MSS_SET(txd, mss);
 

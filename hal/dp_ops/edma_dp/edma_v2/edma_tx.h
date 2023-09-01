@@ -41,6 +41,8 @@
 #define EDMA_TX_RING_SIZE_MASK		(EDMA_TX_RING_SIZE - 1)
 
 #define EDMA_TX_TSO_SEG_MAX		32	/* Max segment processing capacity of HW for TSO */
+#define EDMA_TX_TSO_MSS_MIN		256	/* HW defined low MSS size */
+#define EDMA_TX_TSO_MSS_MAX		10240	/* HW defined high MSS size */
 
 #define EDMA_TX_RING_PER_CORE_MAX	(EDMA_TX_MAX_PRIORITY_LEVEL * EDMA_MAX_PORTS)
 
