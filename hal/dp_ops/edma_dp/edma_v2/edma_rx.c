@@ -23,7 +23,6 @@
 #include <nss_dp_vp.h>
 #include <linux/phy.h>
 #include "edma.h"
-#include "edma_cfg_rx.h"
 #include "edma_debug.h"
 #include "edma_regs.h"
 #include "nss_dp_dev.h"
@@ -295,18 +294,22 @@ static inline void edma_rx_sawf_sc_stats_update(uint64_t pkt_length, struct edma
  */
 static void edma_rx_handle_wifi_qos_packets(struct edma_gbl_ctx *egc, struct edma_rxdesc_ring *rxdesc_ring, struct edma_rxdesc_desc *rxdesc_head, struct sk_buff *skb)
 {
-	uint16_t desc_index, peer_id;
+	uint16_t desc_index, peer_id, next_desc_index;
 	uint8_t service_class, wifi_qos;
-	struct edma_rxdesc_sec_desc *rxdesc_sec;
+	struct edma_rxdesc_sec_desc *rxdesc_sec, *next_rxdesc_sec;
 	ppe_drv_tree_id_type_t tree_id_type;
 
 	desc_index = ((uint8_t *)rxdesc_head - (uint8_t *)rxdesc_ring->pdesc) >> EDMA_RXDESC_SIZE_SHIFT;
 	rxdesc_sec = EDMA_RXDESC_SEC_DESC(rxdesc_ring, desc_index);
 
 	/*
-	 * Invalidate the secondary descriptor before using its fields.
+	 * Depending on the use-case, sometime PPE generate the same CPU
+	 * code for every packet, prefetch the next secondary descriptor
+	 * to handle such cases.
 	 */
-	dmac_inv_range((void *)rxdesc_sec, (void *)(rxdesc_sec + 1));
+	next_desc_index = (desc_index + 1) & EDMA_RX_RING_SIZE_MASK;
+	next_rxdesc_sec = EDMA_RXDESC_SEC_DESC(rxdesc_ring, next_desc_index);
+	prefetch(next_rxdesc_sec);
 
 	tree_id_type = EDMA_RXDESC_TREE_ID_TYPE_GET(rxdesc_sec);
 
@@ -385,17 +388,6 @@ static inline bool edma_rx_handle_sc_cc_packets(struct edma_gbl_ctx *egc,
 	if (likely(EDMA_RXDESC_CPU_CODE_VALID_GET(rxdesc_head))) {
 		desc_index = ((uint8_t *)rxdesc_head - (uint8_t *)rxdesc_ring->pdesc) >> EDMA_RXDESC_SIZE_SHIFT;
 		rxdesc_sec = EDMA_RXDESC_SEC_DESC(rxdesc_ring, desc_index);
-
-		/*
-		 * Invalidate the secondary descriptor before using its fields.
-		 * TODO:
-		 * 1. Optimize the invalidation of secondary descriptor.
-		 * 2. Remove the sysctl protecting invalidation.
-		 */
-		if (unlikely(edma_cfg_rx_sec_desc_inval)) {
-			dmac_inv_range((void *)rxdesc_sec, (void *)(rxdesc_sec + 1));
-		}
-
 		cpu_code = EDMA_RXDESC_CPU_CODE_GET(rxdesc_sec);
 
 		/*
@@ -926,6 +918,7 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 				struct edma_rxdesc_ring *rxdesc_ring)
 {
 	struct edma_rxdesc_desc *rxdesc_desc, *pf_desc = NULL;
+	struct edma_rxdesc_sec_desc *rxdesc_sec;
 	struct edma_rx_desc_stats *rxdesc_stats = &rxdesc_ring->rx_desc_stats;
 	uint32_t work_to_do, work_done = 0;
 	uint16_t prod_idx, cons_idx, end_idx;
@@ -966,6 +959,7 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 	end_idx = (cons_idx + work_to_do) & EDMA_RX_RING_SIZE_MASK;
 
 	rxdesc_desc = EDMA_RXDESC_PRI_DESC(rxdesc_ring, cons_idx);
+	rxdesc_sec = EDMA_RXDESC_SEC_DESC(rxdesc_ring, cons_idx);
 
 	/*
 	 * Invalidate all the cached descriptors
@@ -974,11 +968,17 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 	if (end_idx > cons_idx) {
 		dmac_inv_range_no_dsb((void *)rxdesc_desc,
 			(void *)(rxdesc_desc + work_to_do));
+		dmac_inv_range_no_dsb((void *)rxdesc_sec,
+			(void *)(rxdesc_sec + work_to_do));
 	} else {
 		dmac_inv_range_no_dsb((void *)rxdesc_ring->pdesc,
 			(void *)(rxdesc_ring->pdesc + end_idx));
+		dmac_inv_range_no_dsb((void *)rxdesc_ring->sdesc,
+			(void *)(rxdesc_ring->sdesc + end_idx));
 		dmac_inv_range_no_dsb((void *)rxdesc_desc,
 			(void *)(rxdesc_ring->pdesc + EDMA_RX_RING_SIZE));
+		dmac_inv_range_no_dsb((void *)rxdesc_sec,
+			(void *)(rxdesc_ring->sdesc + EDMA_RX_RING_SIZE));
 	}
 
 	/*
