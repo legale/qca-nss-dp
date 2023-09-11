@@ -26,10 +26,6 @@
 #include <linux/of_address.h>
 #include <linux/of_mdio.h>
 #include <linux/phy.h>
-#if defined(NSS_DP_NETSTANDBY)
-#include <linux/netstandby.h>
-#include <fal/fal_port_ctrl.h>
-#endif
 #if defined(NSS_DP_PPE_SUPPORT)
 #include <fal/fal_vsi.h>
 #include <ref/ref_vsi.h>
@@ -37,10 +33,6 @@
 #include <net/switchdev.h>
 #if defined(NSS_DP_MAC_POLL_SUPPORT)
 #include <init/ssdk_init.h>
-#endif
-#if defined(NSS_DP_NETSTANDBY)
-#include <ppe_drv.h>
-#include <ppe_drv_port.h>
 #endif
 #include "nss_dp_hal.h"
 #define JUMBO_MRU_3K 3072
@@ -116,10 +108,6 @@ MODULE_PARM_DESC(nss_dp_rx_mitigation_pkt_cnt, "Rx mitigation packet count value
 uint8_t nss_dp_pri_map[EDMA_PRI_MAX] = {0, 1, 2, 3, 4, 5, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7};
 module_param_array(nss_dp_pri_map, byte, NULL, S_IRUGO);
 MODULE_PARM_DESC(nss_dp_pri_map, "Priority to multi-queue mapping");
-#endif
-
-#if defined(NSS_DP_NETSTANDBY)
-struct nss_dp_standby_gbl_ctx standby_gbl_ctx;
 #endif
 
 /*
@@ -264,293 +252,6 @@ static void nss_dp_get_stats64(struct net_device *netdev,
 	 */
 	dp_priv->gmac_hal_ops->getndostats(dp_priv->gmac_hal_ctx, stats);
 }
-#endif
-
-/*
- * TODO: Move standby to a different file
- */
-#if defined(NSS_DP_NETSTANDBY)
-static int nss_dp_standby_forced_standby_exit(struct nss_dp_standby_gbl_ctx *standby_gbl_ctx)
-{
-	struct nss_dp_global_ctx *ctx = standby_gbl_ctx->ctx;
-	int32_t mac_id;
-	sw_error_t sw_err;
-	int i = 0;
-
-	for (i = 0; i < NSS_DP_HAL_MAX_PORTS; i++) {
-		mac_id = ctx->nss_dp[i]->macid;
-		if (!standby_gbl_ctx->erp_powerdown_state[mac_id])
-			continue;
-
-		sw_err = fal_port_erp_power_mode_set(EDMA_SWITCH_DEV_ID, mac_id, FAL_ERP_ACTIVE);
-		if (sw_err != SW_OK) {
-			return -ENOTSUPP;
-		}
-
-		standby_gbl_ctx->erp_powerdown_state[i] = false;
-	}
-
-	return 0;
-}
-
-#if defined(NSS_DP_IPQ53XX)
-/*
- * nss_dp_exit_mht_standby()
- */
-static int nss_dp_exit_mht_standby(struct nss_dp_global_ctx *ctx, struct netstandby_exit_info *info)
-{
-	sw_error_t sw_err;
-	int i = 0;
-
-	for (i = 1; i < 4; i++) {
-		if (!standby_gbl_ctx.erp_mht_powerdown_state[i])
-			continue;
-
-		sw_err = fal_port_erp_power_mode_set(NSS_DP_EDMA_SWITCH_MHT_DEV_ID, i, FAL_ERP_ACTIVE);
-		if (sw_err != SW_OK) {
-			pr_warn("Error in putting device(%d) to power state(%d)\n", standby_gbl_ctx.erp_mht_powerdown_state[i], FAL_ERP_ACTIVE);
-			return -ENOTSUPP;
-		}
-
-		standby_gbl_ctx.erp_mht_powerdown_state[i] = false;
-	}
-
-	return 0;
-}
-
-/*
- * nss_dp_enter_mht_standby()
- */
-static int nss_dp_enter_mht_standby(struct nss_dp_global_ctx *ctx, struct netstandby_entry_info *info)
-{
-	sw_error_t sw_err;
-	int i = 0;
-	bool wakeup_id = 0;
-
-	if ((info->nss_info.flags & NETSTANDBY_ENTER_NSS_FLAG_VALID_PORT_ALL) == NETSTANDBY_ENTER_NSS_FLAG_VALID_PORT_ALL) {
-		return 0;
-	} else if ((info->nss_info.flags & NETSTANDBY_ENTER_NSS_FLAG_VALID_PORT_IDX) == NETSTANDBY_ENTER_NSS_FLAG_VALID_PORT_IDX) {
-		/*
-		 * This case is entered when one of the MHT port should be awake.
-		 */
-		wakeup_id = info->nss_info.port_id;
-		standby_gbl_ctx.erp_mht_powerdown_state[wakeup_id] = false;
-	}
-
-	for (i = 1; i <= 4; i++) {
-		if (i == wakeup_id)
-			continue;
-
-		sw_err = fal_port_erp_power_mode_set(NSS_DP_EDMA_SWITCH_MHT_DEV_ID, i, FAL_ERP_LOW_POWER);
-		if (sw_err != SW_OK) {
-			pr_warn("%p Error in Manhattan Switch device(%d) to power down state(%d)\n", ctx, i, FAL_ERP_LOW_POWER);
-			return -ENOTSUPP;
-		}
-
-		/*
-		 * Keep a copy of interfaces that is going down
-		 */
-		standby_gbl_ctx.erp_mht_powerdown_state[i] = true;
-	}
-
-	return 0;
-}
-#endif
-
-/*
- * nss_dp_exit_standby()
- *	Exit standby API()
- */
-int nss_dp_exit_standby(void *app_data, struct netstandby_exit_info *exit_info)
-{
-	struct nss_dp_standby_gbl_ctx *standby_gbl_ctx = (struct nss_dp_standby_gbl_ctx *)app_data;
-	struct nss_dp_global_ctx *ctx = standby_gbl_ctx->ctx;
-	int32_t mac_id;
-	sw_error_t sw_err;
-	int i = 0;
-
-	for (i = 0; i < NSS_DP_HAL_MAX_PORTS; i++) {
-		mac_id = ctx->nss_dp[i]->macid;
-		if (!standby_gbl_ctx->erp_powerdown_state[mac_id])
-			continue;
-
-		sw_err = fal_port_erp_power_mode_set(EDMA_SWITCH_DEV_ID, mac_id, FAL_ERP_ACTIVE);
-		if (sw_err != SW_OK) {
-			pr_warn("Error in putting device(%d) to power state(%d)\n", mac_id, FAL_ERP_ACTIVE);
-			return -ENOTSUPP;
-		}
-
-		standby_gbl_ctx->erp_powerdown_state[i] = false;
-	}
-
-#if defined(NSS_DP_IPQ53XX)
-	if (nss_dp_exit_mht_standby(ctx, exit_info)) {
-		pr_warn("Error in putting manhattan device to low power state\n");
-		return -ENOTSUPP;
-	}
-#endif
-
-	/*
-	 * Invoke exit completion
-	 */
-	if (standby_gbl_ctx->exit_cmp_cb) {
-		struct netstandby_event_compl_info event_info = {0};
-		event_info.system_type = NETSTANDBY_SUBSYSTEM_TYPE_NSS;
-		event_info.event_type = NETSTANDBY_NOTIF_EXIT_COMPLETE;
-		standby_gbl_ctx->exit_cmp_cb(app_data, &event_info);
-	}
-
-	return 0;
-}
-
-/*
- * nss_dp_enter_standby()
- *	Enter standby API()
- */
-int nss_dp_enter_standby(void *app_data, struct netstandby_entry_info *entry_info)
-{
-	struct nss_dp_standby_gbl_ctx *standby_gbl_ctx = (struct nss_dp_standby_gbl_ctx *)app_data;
-	struct nss_dp_global_ctx *ctx = standby_gbl_ctx->ctx;
-	int32_t port_id;
-	sw_error_t sw_err;
-	int i = 0;
-	struct net_device *dev;
-	bool pwr_down = true;
-	int32_t mac_id = 0;
-
-	/*
-	 * Default case when all interfaces need to be powered down
-	 */
-	if (entry_info->iface_cnt == 0) {
-		for (i = 0; i < NSS_DP_HAL_MAX_PORTS; i++) {
-			mac_id = ctx->nss_dp[i]->macid;
-
-#if defined(NSS_DP_IPQ53XX)
-			/* ETH1 with mac_id is an internal port; we dont support power down for it */
-			if (mac_id == 1) {
-				if (nss_dp_enter_mht_standby(ctx, entry_info)) {
-					pr_warn("%p Error in Manhattan Switch device(%d) to power down state(%d)\n", ctx, port_id, FAL_ERP_LOW_POWER);
-					nss_dp_standby_forced_standby_exit(standby_gbl_ctx);
-					return -ENOTSUPP;
-				}
-
-				standby_gbl_ctx->erp_powerdown_state[mac_id] = false;
-				continue;
-			}
-#endif
-			sw_err = fal_port_erp_power_mode_set(EDMA_SWITCH_DEV_ID, mac_id, FAL_ERP_LOW_POWER);
-			if (sw_err != SW_OK) {
-				pr_warn("%p Error in putting device(%d) to power state(%d)\n", ctx, port_id, FAL_ERP_LOW_POWER);
-				nss_dp_standby_forced_standby_exit(standby_gbl_ctx);
-				return -ENOTSUPP;
-			}
-
-			/*
-			 * Keep a copy of interfaces that is going down
-			 */
-			standby_gbl_ctx->erp_powerdown_state[mac_id] = true;
-
-#if defined(NSS_DP_IPQ53XX)
-			if (nss_dp_enter_mht_standby(ctx, entry_info)) {
-				pr_warn("%p Error in Manhattan Switch device(%d) to power down state(%d)\n", ctx, port_id, FAL_ERP_LOW_POWER);
-				nss_dp_standby_forced_standby_exit(standby_gbl_ctx);
-				return -ENOTSUPP;
-			}
-#endif
-		}
-
-		/*
-		 * Indicate completion to standby module
-		 */
-		if (standby_gbl_ctx->enter_cmp_cb) {
-			struct netstandby_event_compl_info event_info = {0};
-			event_info.system_type = NETSTANDBY_SUBSYSTEM_TYPE_NSS;
-			event_info.event_type = NETSTANDBY_NOTIF_ENTER_COMPLETE;
-			standby_gbl_ctx->enter_cmp_cb(app_data, &event_info);
-		}
-
-		return 0;
-	}
-
-	for (i = 0; i < NSS_DP_HAL_MAX_PORTS; i++) {
-		int j = 0;
-		pwr_down = true;
-
-		dev = ctx->nss_dp[i]->netdev;
-		if (!dev) {
-			standby_gbl_ctx->erp_powerdown_state[i] = false;
-			continue;
-		}
-
-		/*
-		 * List sent to subsystem contains devices that need to be in wakeup state to receive trigger;
-		 * power down the remaining interfaces
-		 */
-		for (j = 0; j < entry_info->iface_cnt; j++) {
-			if (entry_info->dev[j] == dev) {
-				pwr_down = false;
-				mac_id = ctx->nss_dp[i]->macid;
-				standby_gbl_ctx->erp_powerdown_state[mac_id] = false;
-				break;
-			}
-		}
-
-		if (pwr_down) {
-			mac_id = ctx->nss_dp[i]->macid;
-#if defined(NSS_DP_IPQ53XX)
-			/* ETH1 with mac_id is an internal port; we dont support power down for it */
-			if (nss_dp_enter_mht_standby(ctx, entry_info)) {
-				pr_warn("%p Error in Manhattan Switch device(%d) to power down state(%d)\n", ctx, port_id, FAL_ERP_LOW_POWER);
-				nss_dp_standby_forced_standby_exit(standby_gbl_ctx);
-				return -ENOTSUPP;
-			}
-
-			if (mac_id == 1) {
-				standby_gbl_ctx->erp_powerdown_state[mac_id] = false;
-				continue;
-			}
-#endif
-			sw_err = fal_port_erp_power_mode_set(EDMA_SWITCH_DEV_ID, mac_id, FAL_ERP_LOW_POWER);
-			if (sw_err != SW_OK) {
-				pr_warn("%p Error in putting device(%d) name(%s) to power state(%d)\n", ctx, mac_id, dev->name, FAL_ERP_LOW_POWER);
-				nss_dp_standby_forced_standby_exit(standby_gbl_ctx);
-				return -ENOTSUPP;
-			}
-
-			standby_gbl_ctx->erp_powerdown_state[mac_id] = true;
-		}
-	}
-
-	/*
-	 * Indicate completion to standby module
-	 */
-	if (standby_gbl_ctx->enter_cmp_cb) {
-		struct netstandby_event_compl_info event_info = {0};
-		event_info.system_type = NETSTANDBY_SUBSYSTEM_TYPE_NSS;
-		event_info.event_type = NETSTANDBY_NOTIF_ENTER_COMPLETE;
-		standby_gbl_ctx->enter_cmp_cb(app_data, &event_info);
-	}
-
-	return 0;
-}
-
-/*
- * nss_dp_get_and_register_cb()
- *	Get and register cb
- */
-int nss_dp_get_and_register_cb(struct netstandby_reg_info *info)
-{
-	struct nss_dp_standby_gbl_ctx *standby_ctx = &standby_gbl_ctx;
-	info->enter_cb = nss_dp_enter_standby;
-	info->exit_cb = nss_dp_exit_standby;
-	info->app_data = standby_ctx;
-
-	standby_ctx->ctx = &dp_global_ctx;
-	standby_ctx->enter_cmp_cb = info->enter_cmp_cb;
-	standby_ctx->exit_cmp_cb = info->exit_cmp_cb;
-	return 0;
-}
-EXPORT_SYMBOL(nss_dp_get_and_register_cb);
 #endif
 
 /*
@@ -1020,6 +721,9 @@ static int32_t nss_dp_of_get_pdata(struct device_node *np,
 	dp_priv->ppe_offload_disabled = of_property_read_bool(np, "qcom,ppe-offload-disabled");
 	pr_info("%s: ppe offload disabled: %d for macid %d\n", np->name,
 				dp_priv->ppe_offload_disabled, dp_priv->macid);
+
+	dp_priv->is_switch_connected = of_property_read_bool(np, "qcom,is_switch_connected");
+	pr_info("%s: Switch attached to macid %d status: %d\n", np->name, dp_priv->macid, dp_priv->is_switch_connected);
 	return 0;
 }
 

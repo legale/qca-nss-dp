@@ -201,18 +201,15 @@ struct nss_dp_global_ctx;
 
 #if defined(NSS_DP_NETSTANDBY)
 /*
- * nss_dp_standby_gbl_ctx
+ * nss_dp_netstandby_gbl_ctx
  *	Global structure to be used as APP data with netstandby module
  */
-struct nss_dp_standby_gbl_ctx {
+struct nss_dp_netstandby_gbl_ctx {
 	struct nss_dp_global_ctx *ctx;	/* Global NSS DP context */
-	bool erp_powerdown_state[NSS_DP_HAL_MAX_PORTS];
-					/* MACID for ErP Wakeup ports */
-#if defined(NSS_DP_IPQ53XX)
-	bool erp_mht_powerdown_state[5];
-#endif
 
-	/* ErP completion callbacks */
+	/*
+	 * ErP completion callbacks
+	 */
 	netstandby_event_compl_cb_t enter_cmp_cb;       /**< Callback enter completion event */
 	netstandby_event_compl_cb_t exit_cmp_cb;        /**< Callback exit completion event */
 };
@@ -265,6 +262,7 @@ struct nss_dp_dev {
 	uint32_t ethtool_priv_flags;	/* Ethtool private flags */
 #endif /* NSS_DP_ETHTOOL_MRR_OPS */
 	bool ppe_offload_disabled;
+	bool is_switch_connected;	/* If there is an additional Switch connected */
 };
 
 /*
