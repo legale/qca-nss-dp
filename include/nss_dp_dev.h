@@ -21,6 +21,9 @@
 
 #include <linux/etherdevice.h>
 #include <linux/netdevice.h>
+#if defined(NSS_DP_NETSTANDBY)
+#include <linux/netstandby.h>
+#endif
 #include <linux/platform_device.h>
 #include <linux/switch.h>
 #include <linux/version.h>
@@ -109,6 +112,10 @@
 #define NSS_DP_VP_MAC_ID		(NSS_DP_HAL_MAX_PORTS + 2)
 #endif
 
+#if defined(NSS_DP_NETSTANDBY) && defined(NSS_DP_IPQ53XX)
+#define NSS_DP_EDMA_SWITCH_MHT_DEV_ID	1
+#endif
+
 /*
  * TODO - move NSS_DP_ETHTOOL_MRR_OPS section to nss_dp_ethtool_priv.h
  */
@@ -191,6 +198,25 @@ static const char nss_dp_priv_flg_str[][ETH_GSTRING_LEN] = {
 #endif /* NSS_DP_ETHTOOL_MRR_OPS */
 
 struct nss_dp_global_ctx;
+
+#if defined(NSS_DP_NETSTANDBY)
+/*
+ * nss_dp_standby_gbl_ctx
+ *	Global structure to be used as APP data with netstandby module
+ */
+struct nss_dp_standby_gbl_ctx {
+	struct nss_dp_global_ctx *ctx;	/* Global NSS DP context */
+	bool erp_powerdown_state[NSS_DP_HAL_MAX_PORTS];
+					/* MACID for ErP Wakeup ports */
+#if defined(NSS_DP_IPQ53XX)
+	bool erp_mht_powerdown_state[5];
+#endif
+
+	/* ErP completion callbacks */
+	netstandby_event_compl_cb_t enter_cmp_cb;       /**< Callback enter completion event */
+	netstandby_event_compl_cb_t exit_cmp_cb;        /**< Callback exit completion event */
+};
+#endif
 
 /*
  * nss data plane device structure
@@ -277,6 +303,10 @@ extern int nss_dp_rx_mitigation_pkt_cnt;
 extern uint8_t nss_dp_pri_map[EDMA_PRI_MAX];
 #endif
 
+#if defined(NSS_DP_NETSTANDBY)
+extern struct nss_dp_standby_gbl_ctx gbl_ctx;
+#endif
+
 /*
  * nss data plane link state
  */
@@ -334,6 +364,7 @@ static inline uint32_t nss_dp_get_idx_from_macid(uint32_t macid)
 
 	return (macid - 2);
 }
+
 #else
 static inline uint32_t nss_dp_get_idx_from_macid(uint32_t macid)
 {
