@@ -470,7 +470,7 @@ static int edma_dp_init(struct nss_dp_data_plane_ctx *dpc)
 	int ret = 0;
 	struct ppe_drv_iface *iface = NULL;
 #ifdef NSS_DP_MHT_SW_PORT_MAP
-	bool is_mht_dev = dp_global_ctx.is_mht_dev;
+	bool is_mht_dev = dp_dev->nss_dp_mht_dev;
 #else
 	bool is_mht_dev = false;
 #endif
