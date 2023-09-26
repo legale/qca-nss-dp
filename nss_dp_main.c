@@ -43,6 +43,7 @@
 #include <ppe_drv_port.h>
 #endif
 #include "nss_dp_hal.h"
+#define JUMBO_MRU_3K 3072
 
 /* ipq40xx_mdio_data */
 struct ipq40xx_mdio_data {
@@ -983,7 +984,33 @@ static int32_t nss_dp_of_get_pdata(struct device_node *np,
 		dp_priv->rx_jumbo_mru = jumbo_mru;
 		pr_info("Jumbo mru is enabled: %d\n", dp_priv->rx_jumbo_mru);
 	}
-#else
+#endif
+
+#if defined(NSS_DP_MEM_PROFILE_MEDIUM)
+	/*
+	 * 512 memory profile supports jumbo mru till 3k.
+	 * For 512 memroy profile, page mode needs to be disabled.
+	 */
+	dp_priv->rx_page_mode = false;
+
+	/*
+	 * 512M profile supports Jumbo mru till 3K
+	 */
+	if (jumbo_mru) {
+		if (jumbo_mru > JUMBO_MRU_3K) {
+			pr_info("Set mru to %d for 512M profile\n", jumbo_mru);
+			jumbo_mru = JUMBO_MRU_3K;
+		}
+
+		dp_priv->rx_jumbo_mru = jumbo_mru;
+		pr_info("Jumbo mru is enabled with size: %d\n", dp_priv->rx_jumbo_mru);
+	}
+
+	if (overwrite_mode || page_mode) {
+		pr_err("512M profile does not support page mode/jumbo mru\n");
+		return -EFAULT;
+	}
+#elif defined(NSS_DP_MEM_PROFILE_LOW)
 	if (overwrite_mode || page_mode || jumbo_mru) {
 		pr_err("Low memory profiles does not support page mode/jumbo mru\n");
 		return -EFAULT;
@@ -1398,6 +1425,11 @@ int __init nss_dp_init(void)
 	dp_global_ctx.overwrite_mode = overwrite_mode;
 	dp_global_ctx.page_mode = page_mode;
 	dp_global_ctx.jumbo_mru = jumbo_mru;
+#elif defined(NSS_DP_MEM_PROFILE_MEDIUM)
+	dp_global_ctx.jumbo_mru = jumbo_mru;
+	if (overwrite_mode && page_mode) {
+		pr_err("512 memory profiles does not support page mode\n");
+	}
 #else
 	if ((overwrite_mode && page_mode) || jumbo_mru) {
 		pr_err("Low memory profiles does not support page mode/jumbo mru\n");

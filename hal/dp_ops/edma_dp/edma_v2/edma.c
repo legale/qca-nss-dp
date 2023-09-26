@@ -268,12 +268,12 @@ void edma_cleanup(bool is_dp_override)
 	 * Clean the debugfs entries for the EDMA
 	 */
 	edma_debugfs_exit();
-
+#if !defined(NSS_DP_MEM_PROFILE_MEDIUM)
 	/*
 	 * Unregister PTP service code callback function
 	 */
 	ppe_drv_sc_unregister_cb(PPE_DRV_SC_PTP);
-
+#endif
 	/*
 	 * Unregister mirror core selection API callback with PPE driver
 	 */
@@ -1242,12 +1242,12 @@ int edma_init(void)
 		ret = -EFAULT;
 		goto edma_hw_init_fail;
 	}
-
+#if !defined(NSS_DP_MEM_PROFILE_MEDIUM)
 	/*
 	 * Register PTP service code callback function
 	 */
 	ppe_drv_sc_register_cb(PPE_DRV_SC_PTP, edma_rx_phy_tstamp_buf, NULL);
-
+#endif
 	/*
 	 * Register mirror core selection API callback with PPE driver
 	 */
