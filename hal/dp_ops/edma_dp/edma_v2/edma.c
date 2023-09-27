@@ -1744,7 +1744,7 @@ static int edma_recovery_deinit(void)
 {
 	reset_control_put(edma_gbl_ctx.hw_rst);
 
-#if defined(NSS_DP_IPQ53XX)
+#if defined(NSS_DP_CONFIG_RST)
 	reset_control_put(edma_gbl_ctx.cfg_rst);
 #endif
 
