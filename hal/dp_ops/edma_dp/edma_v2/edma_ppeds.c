@@ -437,6 +437,9 @@ static void edma_ppeds_set_rx_mapping(uint32_t rxfill_ring_id, uint32_t rx_ring_
 			if (num_ppe_queues == 0) {
 				break;
 			}
+#if GCC_VERSION > 70500
+			fallthrough;
+#endif
 			/* fall through */
 		case 1:
 			data &= (~EDMA_RX_RING_ID_QUEUE1_MASK);
@@ -445,6 +448,9 @@ static void edma_ppeds_set_rx_mapping(uint32_t rxfill_ring_id, uint32_t rx_ring_
 			if (num_ppe_queues == 0) {
 				break;
 			}
+#if GCC_VERSION > 70500
+			fallthrough;
+#endif
 			/* fall through */
 		case 2:
 			data &= (~EDMA_RX_RING_ID_QUEUE2_MASK);
@@ -453,6 +459,9 @@ static void edma_ppeds_set_rx_mapping(uint32_t rxfill_ring_id, uint32_t rx_ring_
 			if (num_ppe_queues == 0) {
 				break;
 			}
+#if GCC_VERSION > 70500
+			fallthrough;
+#endif
 			/* fall through */
 		case 3:
 			data &= (~EDMA_RX_RING_ID_QUEUE3_MASK);
@@ -822,8 +831,13 @@ bool edma_ppeds_inst_register(nss_dp_ppeds_handle_t *ppeds_handle)
 		goto txcomp_irq_fail;
 	}
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 	netif_napi_add(&ppeds_node->napi_ndev, &ppeds_node->txcmpl_ring.napi,
 			edma_ppeds_txcomp_napi_poll, ppeds_handle->eth_txcomp_budget);
+#else
+	netif_napi_add_weight(&ppeds_node->napi_ndev, &ppeds_node->txcmpl_ring.napi,
+			edma_ppeds_txcomp_napi_poll, ppeds_handle->eth_txcomp_budget);
+#endif
 
 	/*
 	 * Setup RxDesc IRQ and NAPI
@@ -855,8 +869,13 @@ bool edma_ppeds_inst_register(nss_dp_ppeds_handle_t *ppeds_handle)
 
 	}
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 	netif_napi_add(&ppeds_node->napi_ndev, &ppeds_node->rx_ring.napi,
 			edma_ppeds_rx_napi_poll, EDMA_PPEDS_RX_WEIGHT);
+#else
+	netif_napi_add_weight(&ppeds_node->napi_ndev, &ppeds_node->rx_ring.napi,
+		edma_ppeds_rx_napi_poll, EDMA_PPEDS_RX_WEIGHT);
+#endif
 
 	/*
 	 * Setup RxFill IRQ and NAPI
@@ -875,8 +894,13 @@ bool edma_ppeds_inst_register(nss_dp_ppeds_handle_t *ppeds_handle)
 
 	}
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 	netif_napi_add(&ppeds_node->napi_ndev, &ppeds_node->rxfill_ring.napi,
 			edma_ppeds_rxfill_napi_poll, EDMA_PPEDS_RXFILL_WEIGHT);
+#else
+	netif_napi_add_weight(&ppeds_node->napi_ndev, &ppeds_node->rxfill_ring.napi,
+			edma_ppeds_rxfill_napi_poll, EDMA_PPEDS_RXFILL_WEIGHT);
+#endif
 
 	ret = edma_ppeds_rx_secondary_alloc(&ppeds_node->rx_ring);
 	if (ret) {
