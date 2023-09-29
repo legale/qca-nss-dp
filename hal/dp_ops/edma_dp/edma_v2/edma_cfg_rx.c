@@ -32,6 +32,7 @@ uint32_t edma_cfg_rx_fc_enable = EDMA_RX_FC_ENABLE;
 uint32_t edma_cfg_rx_queue_tail_drop_enable = EDMA_RX_QUEUE_TAIL_DROP_ENABLE;
 uint32_t edma_cfg_rx_rps_num_cores = NR_CPUS;
 uint32_t edma_cfg_rx_sec_desc_inval = 0;
+uint32_t edma_cfg_rx_rps_bitmap_cores = EDMA_RX_DEFAULT_BITMAP;
 
 /*
  * Rx ring queue offset
@@ -1591,8 +1592,50 @@ int edma_cfg_rx_rps(struct ctl_table *table, int write,
 			       " value: %d", edma_cfg_rx_rps_num_cores, NR_CPUS);
 		edma_cfg_rx_rps_num_cores = NR_CPUS;
 	}
+
+	/*
+	 * Set bitmap based on given number of cores.
+	 */
+	edma_cfg_rx_rps_bitmap_cores = (1 << edma_cfg_rx_rps_num_cores) - 1;
 	edma_configure_rps_hash_map(&edma_gbl_ctx);
 
 	edma_warn("EDMA RPS configured to use %d cores\n", edma_cfg_rx_rps_num_cores);
+	return ret;
+}
+
+/*
+ * edma_cfg_rx_rps_bitmap()
+ * 	API to configure RPS hash mapping based on bitmap
+ *
+ * The core to use is selected on the basis of set bit in the function
+ * edma_configure_rps_hash_map. We are using edma_cfg_rx_rps_bitmap as it will help
+ * us to distinguish between rps_num_core and rps_bitmap_core as both
+ * are calling the same configure hash function.
+ */
+int edma_cfg_rx_rps_bitmap(struct ctl_table *table, int write,
+		void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	int ret;
+
+	ret = proc_dointvec(table, write, buffer, lenp, ppos);
+
+	if (!write) {
+		return ret;
+	}
+
+	/*
+	 * Check for a valid bitmap core value
+	 * Set to use 4 cores in case of invalid core
+	 */
+	if (!edma_cfg_rx_rps_bitmap_cores ||
+			(edma_cfg_rx_rps_bitmap_cores > EDMA_RX_DEFAULT_BITMAP)) {
+		edma_err("Incorrect CPU bitmap: %d. Setting it to default"
+				" value: %d", edma_cfg_rx_rps_bitmap_cores, EDMA_RX_DEFAULT_BITMAP);
+		edma_cfg_rx_rps_bitmap_cores = EDMA_RX_DEFAULT_BITMAP;
+	}
+
+	edma_configure_rps_hash_map(&edma_gbl_ctx);
+
+	edma_warn("EDMA RPS bitmap value: %d\n", edma_cfg_rx_rps_bitmap_cores);
 	return ret;
 }
