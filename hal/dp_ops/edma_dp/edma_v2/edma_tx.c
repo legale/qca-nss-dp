@@ -413,13 +413,7 @@ static inline void edma_tx_fill_pp_desc(struct nss_dp_dev *dp_dev, struct edma_p
 	EDMA_TXDESC_SERVICE_CODE_SET(txd, EDMA_SC_BYPASS);
 	EDMA_DST_INFO_SET(txd, dp_dev->macid);
 
-	/*
-	 * Set the tx queue priority for the packet
-	 * TODO : Remove Kernel version check once we enable PPE/SFE QoS
-	 */
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 	EDMA_TXDESC_INT_PRI_SET(txd, skb_get_int_pri(skb));
-#endif
 }
 
 /*
