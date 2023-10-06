@@ -49,6 +49,18 @@
 #define EDMA_START_GMACS		NSS_DP_HAL_START_IFNUM
 #define EDMA_MAX_GMACS			NSS_DP_HAL_MAX_PORTS
 #define EDMA_MAX_PORTS			NSS_DP_MAX_PORTS
+
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+#define EDMA_MAX_TX_PORTS		NSS_DP_HAL_MAX_TX_PORTS
+#define EDMA_MAC_TX_MAP			EDMA_MAX_TX_PORTS
+#define EDMA_MAX_FC_GRP			EDMA_MAX_TX_PORTS
+#define EDMA_PPEDS_IRQS			6
+#else
+#define EDMA_MAX_TX_PORTS		EDMA_TX_RING_PER_CORE_MAX
+#define EDMA_MAX_FC_GRP			EDMA_MAX_GMACS
+#define EDMA_MAC_TX_MAP			EDMA_MAX_PORTS
+#endif
+
 #define EDMA_IRQ_NAME_SIZE		32
 #define EDMA_SC_BYPASS			1
 #define EDMA_NETDEV_FEATURES		NETIF_F_FRAGLIST \
@@ -61,6 +73,7 @@
 #define EDMA_SWITCH_DEV_ID	0
 #define EDMA_PPE_QUEUE_LEVEL	0
 #define EDMA_BITS_IN_WORD	32
+#define EDMA_MHT_SWITCH_PORT_ID	1
 
 /*
  * Maximum queue priority
@@ -234,9 +247,9 @@ struct edma_gbl_ctx {
 			/* Bitmap of mapped PPE queue ids of the Rx descriptor rings */
 	int32_t tx_to_txcmpl_map[EDMA_MAX_TXDESC_RINGS];
 			/* Tx ring to Tx complete ring mapping */
-	int32_t tx_map[EDMA_TX_RING_PER_CORE_MAX][NR_CPUS];
+	int32_t tx_map[EDMA_MAX_TX_PORTS][NR_CPUS];
 			/* Per core Tx ring to core mapping */
-	int32_t tx_fc_grp_map[EDMA_MAX_GMACS];
+	int32_t tx_fc_grp_map[EDMA_MAX_FC_GRP];
 			/* Per GMAC TxDesc ring to flow control group mapping */
 	int32_t txcmpl_map[EDMA_TXCMPL_RING_PER_CORE_MAX][NR_CPUS];
 			/* Tx complete ring to core mapping */
@@ -327,6 +340,14 @@ struct edma_gbl_ctx {
 			/* Rx queue start */
 	bool enable_ring_util_stats;
 			/* Flag for tracking ring utilization */
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+	uint8_t max_tx_ports;
+			/* Max Tx ports */
+	uint32_t mht_tx_ports;
+			/* Max MHT Tx ports */
+	uint32_t mht_txcmpl_ports;
+			/* Max MHT Txcmpl ports */
+#endif
 };
 
 extern struct edma_gbl_ctx edma_gbl_ctx;

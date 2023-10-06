@@ -158,6 +158,9 @@ static netdev_tx_t edma_dp_xmit(struct nss_dp_data_plane_ctx *dpc,
 	uint8_t cpu_id;
 	int ret;
 	enum edma_tx_gso result;
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+	uint32_t skb_mark = 0;
+#endif
 
 	/*
 	 * Select a TX ring
@@ -165,7 +168,18 @@ static netdev_tx_t edma_dp_xmit(struct nss_dp_data_plane_ctx *dpc,
 	skbq = (skb_get_queue_mapping(skb) & (NR_CPUS - 1));
 
 	dp_dev = (struct nss_dp_dev *)netdev_priv(netdev);
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+	if (dp_dev->nss_dp_mht_dev) {
+		if (EDMA_TX_MHT_SW_PORT_MARK_VALID(skb->mark))
+			skb_mark = EDMA_TX_MHT_SW_PORT_MARK_GET(skb->mark);
+
+		txdesc_ring = (struct edma_txdesc_ring *)dp_dev->dp_info.txr_sw_port_map[skb_mark][skbq];
+	} else {
+		txdesc_ring = (struct edma_txdesc_ring *)dp_dev->dp_info.txr_map[0][skbq];
+	}
+#else
 	txdesc_ring = (struct edma_txdesc_ring *)dp_dev->dp_info.txr_map[0][skbq];
+#endif
 
 	pcpu_stats = &dp_dev->dp_info.pcpu_stats;
 	stats = this_cpu_ptr(pcpu_stats->tx_stats);
@@ -189,6 +203,17 @@ static netdev_tx_t edma_dp_xmit(struct nss_dp_data_plane_ctx *dpc,
 		 * This queue will be enabled again from EDMA tx complete.
 		 */
 		if (unlikely(ret == EDMA_TX_FAIL_NO_DESC)) {
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+			/*
+			 * When MHT SW port is enabled, Tx rings are mapped
+			 * to individual MHT ports but netdev still
+			 * remains same. Hence requeue cannot be done if
+			 * MHT SW port mapping is enabled on MHT netdevice.
+			 */
+			if (unlikely(dp_dev->nss_dp_mht_dev)) {
+				goto no_requeue;
+			}
+#endif
 			if (likely(!dp_global_ctx.tx_requeue_stop)) {
 				cpu_id = smp_processor_id();
 				edma_debug("Stopping tx queue due to lack of tx descriptors\n");
@@ -199,7 +224,9 @@ static netdev_tx_t edma_dp_xmit(struct nss_dp_data_plane_ctx *dpc,
 				return NETDEV_TX_BUSY;
 			}
 		}
-
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+no_requeue:
+#endif
 		if (unlikely(ret != EDMA_TX_OK)) {
 			dev_kfree_skb_any(skb);
 			u64_stats_update_begin(&stats->syncp);
@@ -442,6 +469,11 @@ static int edma_dp_init(struct nss_dp_data_plane_ctx *dpc)
 	struct nss_dp_dev *dp_dev = (struct nss_dp_dev *)netdev_priv(netdev);
 	int ret = 0;
 	struct ppe_drv_iface *iface = NULL;
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+	bool is_mht_dev = dp_global_ctx.is_mht_dev;
+#else
+	bool is_mht_dev = false;
+#endif
 
 	/*
 	 * Allocate per-cpu stats memory
@@ -492,7 +524,8 @@ static int edma_dp_init(struct nss_dp_data_plane_ctx *dpc)
 		/*
 		 * Initialize port allocated in PPE
 		 */
-		if (ppe_drv_dp_init(iface, dp_dev->macid) != PPE_DRV_RET_SUCCESS) {
+		if (ppe_drv_dp_init(iface, dp_dev->macid,
+					is_mht_dev) != PPE_DRV_RET_SUCCESS) {
 			netdev_err(netdev, "Error allocating PPE interface for dev(%p) dev-name %s\n",
 					netdev, netdev->name);
 			ppe_drv_iface_deref(iface);

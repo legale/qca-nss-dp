@@ -39,6 +39,10 @@ void edma_cfg_tx_cmpl_mapping_fill(struct edma_gbl_ctx *egc);
 void edma_cfg_tx_rings_enable(struct edma_gbl_ctx *egc);
 void edma_cfg_tx_rings_disable(struct edma_gbl_ctx *egc);
 void edma_cfg_tx_fill_per_port_tx_map(struct net_device *netdev, uint32_t macid);
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+void edma_cfg_tx_set_mht_mdio_slv_pause(struct edma_gbl_ctx *egc);
+void edma_cfg_tx_set_max_ports(struct edma_gbl_ctx *egc);
+#endif
 #if defined(NSS_DP_POINT_OFFLOAD)
 void edma_cfg_tx_point_offload_mapping(struct edma_gbl_ctx *egc);
 #endif

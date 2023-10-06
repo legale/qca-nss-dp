@@ -428,6 +428,20 @@ static int edma_of_get_pdata(struct resource *edma_res)
 		return -EINVAL;
 	}
 
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+	if (dp_global_ctx.is_mht_dev) {
+		if (of_property_read_u32(edma_gbl_ctx.device_node,
+					"qcom,mht-txdesc-rings",
+					&edma_gbl_ctx.mht_tx_ports) != 0) {
+			edma_err("Unable to read number of mht txdesc rings.\n");
+			return -EINVAL;
+		}
+		edma_gbl_ctx.num_txdesc_rings += edma_gbl_ctx.mht_tx_ports;
+	} else {
+		edma_gbl_ctx.mht_tx_ports = 0;
+	}
+#endif
+
 	if (edma_gbl_ctx.num_txdesc_rings > EDMA_MAX_TXDESC_RINGS) {
 		edma_err("Invalid txdesc-rings value (%d) received as input\n",
 				edma_gbl_ctx.num_txdesc_rings);
@@ -470,6 +484,20 @@ static int edma_of_get_pdata(struct resource *edma_res)
 		edma_err("Unable to read number of txcmpl rings.\n");
 		return -EINVAL;
 	}
+
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+	if (dp_global_ctx.is_mht_dev) {
+		if (of_property_read_u32(edma_gbl_ctx.device_node,
+					"qcom,mht-txcmpl-rings",
+					&edma_gbl_ctx.mht_txcmpl_ports) != 0) {
+			edma_err("Unable to read number of mht txcmpl rings.\n");
+			return -EINVAL;
+		}
+		edma_gbl_ctx.num_txcmpl_rings += edma_gbl_ctx.mht_txcmpl_ports;
+	} else {
+		edma_gbl_ctx.mht_txcmpl_ports = 0;
+	}
+#endif
 
 	if (edma_gbl_ctx.num_txcmpl_rings > EDMA_MAX_TXCMPL_RINGS) {
 		edma_err("Invalid txcmpl-rings value (%d) received as input\n",
@@ -625,9 +653,9 @@ static int edma_of_get_pdata(struct resource *edma_res)
 	 * Get TXDESC Map
 	 */
 	ret = of_property_read_u32_array(edma_gbl_ctx.device_node,
-			"qcom,txdesc-map",
-			(int32_t *)edma_gbl_ctx.tx_map,
-			(EDMA_MAX_PORTS * EDMA_TX_MAX_PRIORITY_LEVEL * NR_CPUS));
+		"qcom,txdesc-map",
+		(int32_t *)edma_gbl_ctx.tx_map,
+		(EDMA_MAC_TX_MAP * EDMA_TX_MAX_PRIORITY_LEVEL * NR_CPUS));
 	if (ret) {
 		edma_err("Unable to read Tx map array. ret: %d\n", ret);
 		return -EINVAL;
@@ -677,11 +705,11 @@ static int edma_of_get_pdata(struct resource *edma_res)
 	 */
 	ret = of_property_read_u32_array(edma_gbl_ctx.device_node,
 			"qcom,txdesc-fc-grp-map",
-			(int32_t *)edma_gbl_ctx.tx_fc_grp_map, EDMA_MAX_GMACS);
+			(int32_t *)edma_gbl_ctx.tx_fc_grp_map, EDMA_MAX_FC_GRP);
 	if (ret) {
 		edma_err("Unable to read TxDesc-Fc-Grp map array. \
-			ret: %d\n", ret);
-		return -EINVAL;
+				ret: %d\n", ret);
+			return -EINVAL;
 	}
 
 	/*
@@ -835,9 +863,8 @@ static void edma_init_ring_maps(void)
 		}
 	}
 
-	for (i = 0; i < EDMA_MAX_GMACS; i++) {
+	for (i = 0; i < EDMA_MAX_FC_GRP; i++)
 		edma_gbl_ctx.tx_fc_grp_map[i] = -1;
-	}
 }
 
 /*
@@ -932,6 +959,10 @@ static int edma_hw_init(struct edma_gbl_ctx *egc)
 {
 	int ret = 0;
 	uint32_t data;
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+	fal_athtag_tx_cfg_t tx_cfg = {0};
+	sw_error_t fal_ret;
+#endif
 
 	data = edma_reg_read(EDMA_REG_MAS_CTRL);
 	edma_info("EDMA ver %d hw init\n", data);
@@ -964,6 +995,13 @@ static int edma_hw_init(struct edma_gbl_ctx *egc)
 	 * Set EDMA global page mode and jumbo MRU
 	 */
 	edma_cfg_rx_page_mode_and_jumbo(egc);
+
+	/*
+	 * Set EDMA Tx max ports.
+	 */
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+	edma_cfg_tx_set_max_ports(egc);
+#endif
 
 	ret = edma_alloc_rings(egc);
 	if (ret) {
@@ -1051,6 +1089,32 @@ static int edma_hw_init(struct edma_gbl_ctx *egc)
 	 * Initialize RPS hash map table
 	 */
 	edma_configure_rps_hash_map(egc);
+
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+	if (dp_global_ctx.is_mht_dev) {
+
+		/*
+		 * Mapping of MHT MDIO SLV pause ID to VP_PORTS.
+		 */
+		edma_cfg_tx_set_mht_mdio_slv_pause(egc);
+
+		/*
+		 * Set the atheros header for MHT switch.
+		 */
+		tx_cfg.athtag_en = true;
+		tx_cfg.athtag_type = MHT_ATHTAG_TYPE;
+		tx_cfg.version = FAL_ATHTAG_VER3;
+		tx_cfg.action = FAL_ATHTAG_ACTION_NORMAL;
+		tx_cfg.bypass_fwd_en = false;
+		tx_cfg.field_disable = false;
+		fal_ret = fal_port_athtag_tx_set(EDMA_SWITCH_DEV_ID,
+						EDMA_MHT_SWITCH_PORT_ID,
+						&tx_cfg);
+		if (fal_ret != SW_OK)
+			edma_err("\nMHT SW atheros header set fail:%d\n",
+					fal_ret);
+	}
+#endif
 
 	egc->edma_initialized = true;
 
@@ -1317,12 +1381,19 @@ int edma_irq_init(void)
 {
 	int err;
 	uint32_t entry_num, i;
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+	uint32_t num_txcmpl_rings = edma_gbl_ctx.num_txcmpl_rings -
+					edma_gbl_ctx.mht_txcmpl_ports;
+	uint32_t ppeds_nodes = 0;
+#else
+	uint32_t num_txcmpl_rings = edma_gbl_ctx.num_txcmpl_rings;
+#endif
 
 	/*
 	 * Get TXCMPL rings IRQ numbers
 	 */
 	entry_num = 0;
-	for (i = 0; i < edma_gbl_ctx.num_txcmpl_rings; i++, entry_num++) {
+	for (i = 0; i < num_txcmpl_rings; i++, entry_num++) {
 		edma_gbl_ctx.txcmpl_intr[i] =
 			platform_get_irq(edma_gbl_ctx.pdev, entry_num);
 		if (edma_gbl_ctx.txcmpl_intr[i] < 0) {
@@ -1374,6 +1445,9 @@ int edma_irq_init(void)
 		int32_t val;
 
 		entry_num++;
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+		ppeds_nodes++;
+#endif
 		val = platform_get_irq(edma_gbl_ctx.pdev, entry_num);
 		if (val < 0) {
 			edma_err("%s: Invalid value: ppeds_txcomp_intr[%u]: %d\n",
@@ -1405,6 +1479,37 @@ int edma_irq_init(void)
 			edma_gbl_ctx.ppeds_drv.ppeds_node_cfg[i].irq_map[EDMA_PPEDS_RXDESC_IRQ_IDX],
 			edma_gbl_ctx.ppeds_drv.ppeds_node_cfg[i].irq_map[EDMA_PPEDS_RXFILL_IRQ_IDX]);
 	}
+#endif
+
+	/*
+	 * Get TXCMPL rings IRQ numbers for MHT txcmpl rings.
+	 */
+#ifdef NSS_DP_MHT_SW_PORT_MAP
+	if (!dp_global_ctx.is_mht_dev)
+		goto done;
+
+	/*
+	 * Txcmpl IRQ index needs to reach correct index
+	 * in case PPEDS code is compiled out.
+	 */
+	if (!ppeds_nodes)
+		entry_num += EDMA_PPEDS_IRQS;
+
+	for (i = num_txcmpl_rings; i < edma_gbl_ctx.num_txcmpl_rings; i++) {
+		entry_num++;
+		edma_gbl_ctx.txcmpl_intr[i] =
+			platform_get_irq(edma_gbl_ctx.pdev, entry_num);
+		if (edma_gbl_ctx.txcmpl_intr[i] < 0) {
+			edma_err("%s: txcmpl_intr[%u] irq get failed\n",
+					(edma_gbl_ctx.device_node)->name, i);
+			return -1;
+		}
+
+		edma_debug("%s: txcmpl_intr[%u] = %u\n",
+				(edma_gbl_ctx.device_node)->name,
+				i, edma_gbl_ctx.txcmpl_intr[i]);
+	}
+done:
 #endif
 
 	/*
