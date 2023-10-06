@@ -67,6 +67,10 @@ ifeq ($(dp-ppe-ds),y)
 qca-nss-dp-objs += hal/dp_ops/edma_dp/edma_v2/edma_ppeds.o
 ccflags-y += -DNSS_DP_PPEDS_SUPPORT
 endif
+ifeq ($(dp-net-standby),y)
+qca-nss-dp-objs += nss_dp_netstandby.o
+ccflags-y += -DNSS_DP_NETSTANDBY
+endif
 NSS_DP_INCLUDE += -I$(obj)/hal/dp_ops/edma_dp/edma_v2
 NSS_DP_INCLUDE += -I$(obj)/hal/dp_ops/edma_dp/edma_v2/include
 ccflags-y += -DNSS_DP_ENABLE_NAPI_GRO -DNSS_DP_VP_SUPPORT -DNSS_DP_EDMA_V2 -DNSS_DP_MAC_POLL_SUPPORT -DNSS_DP_SW_BR_OPS -DNSS_DP_ETHTOOL_MRR_OPS
