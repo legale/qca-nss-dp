@@ -1114,7 +1114,7 @@ EXPORT_SYMBOL(nss_dp_nsm_sawf_sc_stats_read);
  */
 int __init nss_dp_init(void)
 {
-	int ret;
+	int ret, i;
 
 	dp_global_ctx.common_init_done = false;
 
@@ -1163,6 +1163,13 @@ int __init nss_dp_init(void)
 	if (nss_dp_mht_multi_txring)
 		dp_global_ctx.is_mht_dev = true;
 #endif
+
+	/*
+	 * Initialize nss dp pointer to NULL
+	 */
+	for (i = 0; i < NSS_DP_MAX_PORTS; i++) {
+		dp_global_ctx.nss_dp[i] = NULL;
+	}
 
 	/*
 	 * Check platform compatibility and

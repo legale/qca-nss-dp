@@ -88,7 +88,12 @@ int nss_dp_netstandby_enter_standby(void *app_data, struct netstandby_entry_info
 	if (entry_info->iface_cnt != 0) {
 		for (i = 0; i < NSS_DP_HAL_MAX_PORTS; i++) {
 			int j = 0;
+
+			if (!ctx->nss_dp[i])
+				continue;
+
 			dev = ctx->nss_dp[i]->netdev;
+
 			/*
 			 * If netdevice is NULL; then continue to next index
 			 */
