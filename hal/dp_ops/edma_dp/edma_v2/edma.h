@@ -22,6 +22,8 @@
 #include <fal/fal_qm.h>
 #include <fal/fal_qos.h>
 #include <linux/netdevice.h>
+#include <linux/reset.h>
+#include <linux/of_platform.h>
 #include <nss_dp_arch.h>
 #include <nss_dp_api_if.h>
 #include <nss_dp_hal_if.h>
@@ -216,6 +218,10 @@ struct edma_gbl_ctx {
 			/* Net device for each GMAC port */
 	struct device_node *device_node;
 			/* Device tree node */
+	struct reset_control *hw_rst;
+			/* Hardware reset
+ 			 * TODO - Revisit if this hardware reset is actually required.
+			 */
 	struct platform_device *pdev;
 			/* Platform device */
 	void __iomem *reg_base;
@@ -348,6 +354,8 @@ struct edma_gbl_ctx {
 	uint32_t mht_txcmpl_ports;
 			/* Max MHT Txcmpl ports */
 #endif
+	struct work_struct work;
+                        /* Creating work struct */
 };
 
 extern struct edma_gbl_ctx edma_gbl_ctx;
@@ -359,6 +367,7 @@ void edma_misc_stats_free(void);
 void edma_enable_interrupts(struct edma_gbl_ctx *egc);
 void edma_disable_interrupts(struct edma_gbl_ctx *egc);
 void edma_configure_rps_hash_map(struct edma_gbl_ctx *egc);
+int edma_hang_recovery_handler(struct ctl_table *table, int write, void __user *buffer, size_t *lenp, loff_t *ppos);
 
 /*
  * edma_reg_read()

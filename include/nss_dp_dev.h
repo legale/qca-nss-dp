@@ -305,6 +305,7 @@ extern int nss_dp_tx_mitigation_pkt_cnt;
 extern int nss_dp_rx_mitigation_timer;
 extern int nss_dp_rx_mitigation_pkt_cnt;
 extern uint8_t nss_dp_pri_map[EDMA_PRI_MAX];
+extern int nss_dp_recovery_en;
 #endif
 
 #if defined(NSS_DP_NETSTANDBY)

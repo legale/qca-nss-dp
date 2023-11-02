@@ -73,6 +73,10 @@ int nss_dp_tx_napi_budget = NSS_DP_HAL_TX_NAPI_BUDGET;
 module_param(nss_dp_tx_napi_budget, int, S_IRUGO);
 MODULE_PARM_DESC(nss_dp_tx_napi_budget, "Tx NAPI budget");
 
+int nss_dp_recovery_en = 0;
+module_param(nss_dp_recovery_en, int, 0640);
+MODULE_PARM_DESC(nss_dp_recovery_en, "Enable EDMA recovery (1 for enable, 0 for disable)");
+
 #ifdef NSS_DP_MHT_SW_PORT_MAP
 int nss_dp_mht_multi_txring = 0;
 module_param(nss_dp_mht_multi_txring, int, S_IRUGO);
