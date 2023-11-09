@@ -96,7 +96,7 @@ static inline int edma_rx_alloc_buffer_list(struct edma_rxfill_ring *rxfill_ring
 	uint16_t avail_desc = 0;
 	uint32_t rx_alloc_size = rxfill_ring->alloc_size;
 	uint32_t buf_len = rxfill_ring->buf_len;
-	bool page_mode = rxfill_ring->page_mode, is_rx_fill = true;
+	bool page_mode = rxfill_ring->page_mode;
 	INIT_LIST_HEAD(&rx_skb_alloc);
 
 	/*
@@ -112,10 +112,10 @@ static inline int edma_rx_alloc_buffer_list(struct edma_rxfill_ring *rxfill_ring
 	 */
 	if (unlikely(egc->enable_ring_util_stats)) {
 		cons_idx = edma_reg_read(EDMA_REG_RXFILL_CONS_IDX(rxfill_ring->ring_id)) & EDMA_RXFILL_CONS_IDX_MASK;
-		avail_desc = EDMA_DESC_AVAIL_COUNT(prod_idx, cons_idx, EDMA_RX_RING_SIZE);
+		avail_desc = EDMA_DESC_AVAIL_COUNT(cons_idx, prod_idx, EDMA_RX_RING_SIZE);
 
-		edma_update_ring_stats(avail_desc, EDMA_RX_RING_SIZE - EDMA_MAX_COMPUTE,
-				       &rxfill_ring->rx_fill_stats.ring_stats, is_rx_fill);
+		edma_update_ring_stats(avail_desc, EDMA_RX_RING_SIZE,
+				       &rxfill_ring->rx_fill_stats.ring_stats);
 	}
 
 	while (likely(alloc_count--)) {
@@ -918,7 +918,6 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 	uint16_t cons_idx_1, cons_idx_2;
 	struct sk_buff *cur_skb = NULL;
 	struct list_head rx_list;
-	bool is_rx_fill = false;
 	INIT_LIST_HEAD(&rx_list);
 
 	/*
@@ -930,8 +929,8 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 		prod_idx = edma_reg_read(EDMA_REG_RXDESC_PROD_IDX(rxdesc_ring->ring_id)) & EDMA_RXDESC_PROD_IDX_MASK;
 		work_to_do = EDMA_DESC_AVAIL_COUNT(prod_idx, cons_idx, EDMA_RX_RING_SIZE);
 
-		edma_update_ring_stats(work_to_do, EDMA_RX_RING_SIZE - EDMA_MAX_COMPUTE,
-				       &rxdesc_ring->rx_desc_stats.ring_stats, is_rx_fill);
+		edma_update_ring_stats(work_to_do, EDMA_RX_RING_SIZE,
+				       &rxdesc_ring->rx_desc_stats.ring_stats);
 	}
 
 	if (likely(rxdesc_ring->work_leftover > budget)) {

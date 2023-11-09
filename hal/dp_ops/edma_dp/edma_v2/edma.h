@@ -383,15 +383,9 @@ static inline void edma_reg_write(uint32_t reg_off, uint32_t val)
  *	Update the ring util stats
  */
 static inline int edma_update_ring_stats(uint32_t work_to_do, uint32_t max_desc,
-					 struct edma_ring_util_stats *ring_util, bool rx_fill)
+					 struct edma_ring_util_stats *ring_util)
 {
 	int ring_usage;
-
-	if (rx_fill) {
-		if (work_to_do == 0)
-			ring_util->util[EDMA_RING_USAGE_100_FULL]++;
-		return 0;
-	}
 
 	ring_usage = (100 * work_to_do)/max_desc;
 

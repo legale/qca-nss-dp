@@ -26,12 +26,6 @@
 #define EDMA_RX_SKB_HEADROOM		128
 
 /*
- * If the ring size is 2048, then the max index in ring will be 2046.
- * Hence, we will use below macro in computing ring utilisation of a ring in edma_update_ring_stats API
- */
-#define EDMA_MAX_COMPUTE		2
-
-/*
  * Helper function for generating mask for bit field in a word. This will generate a mask which will
  * enable bits from start to end(both inclusive) of the bit field in a word.
  * For ex: field A extends from 15:8 of a word. here end=15, start=8. This macro generates the mask
