@@ -60,8 +60,28 @@
 #ifdef NSS_DP_MHT_SW_PORT_MAP
 #define EDMA_MAX_TX_PORTS		NSS_DP_HAL_MAX_TX_PORTS
 #define EDMA_MAC_TX_MAP			EDMA_MAX_TX_PORTS
+
+/*
+ * If enabled, separate rings is allocated for VP port.
+ * Else, VP port shares it's rings with MHT.
+ */
+#ifdef NSS_DP_EDMA_MHT_SW_WITH_VP_RING
+#define EDMA_MAX_FC_GRP			EDMA_MAX_TX_PORTS - 1
+#else
 #define EDMA_MAX_FC_GRP			EDMA_MAX_TX_PORTS
+#endif
+
+/*
+ * If enabled, We need to skip the 12 interrupts
+ * that belongs to 4 PPEDS nodes. Else, skip 6
+ * interrupts that belong to 2 PPEDS nodes.
+ */
+#ifdef NSS_DP_EDMA_SKIP_FOUR_PPEDS_NODES
+#define EDMA_PPEDS_IRQS			12
+#else
 #define EDMA_PPEDS_IRQS			6
+#endif
+
 #else
 #define EDMA_MAX_TX_PORTS		EDMA_TX_RING_PER_CORE_MAX
 #define EDMA_MAX_FC_GRP			EDMA_MAX_GMACS
