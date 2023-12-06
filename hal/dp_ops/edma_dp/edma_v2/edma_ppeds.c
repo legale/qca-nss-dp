@@ -1047,7 +1047,7 @@ void edma_ppeds_set_tx_prod_idx(nss_dp_ppeds_handle_t *ppeds_handle, uint16_t tx
 	edma_reg_write(EDMA_REG_TXDESC_PROD_IDX(ppeds_node->tx_ring.id), tx_prod_idx);
 
 	if (unlikely(egc->enable_ring_util_stats)) {
-		cons_idx = edma_reg_read(EDMA_REG_RXDESC_CONS_IDX(ppeds_node->tx_ring.id)) & EDMA_RXDESC_CONS_IDX_MASK;
+		cons_idx = edma_reg_read(EDMA_REG_TXDESC_CONS_IDX(ppeds_node->tx_ring.id)) & EDMA_TXDESC_CONS_IDX_MASK;
 		work_to_do = EDMA_DESC_AVAIL_COUNT(tx_prod_idx, cons_idx, ppeds_node->tx_ring.count);
 		edma_update_ring_stats(work_to_do, ppeds_node->tx_ring.count,
 				       &ppeds_node->tx_ring.tx_desc_stats.ring_stats);
