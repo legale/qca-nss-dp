@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -24,6 +24,7 @@
 #include <linux/of_platform.h>
 #include <linux/irq.h>
 #include <linux/reset.h>
+#include <linux/skbuff.h>
 #include <fal/fal_qm.h>
 #include <fal/fal_rss_hash.h>
 #include <fal/fal_servcode.h>
@@ -99,10 +100,10 @@ bool edma_nsm_sawf_sc_stats_read(struct nss_dp_hal_nsm_sawf_sc_stats *nsm_stats,
 
 	sawf_sc_stats = &edma_gbl_ctx.sawf_sc_stats[service_class];
 	do {
-		start = u64_stats_fetch_begin_irq(&sawf_sc_stats->syncp);
+		start = edma_dp_stats_fetch_begin(&sawf_sc_stats->syncp);
 		nsm_stats->rx_packets = sawf_sc_stats->rx_packets;
 		nsm_stats->rx_bytes = sawf_sc_stats->rx_bytes;
-	} while (u64_stats_fetch_retry_irq(&sawf_sc_stats->syncp, start));
+	} while (edma_dp_stats_fetch_retry(&sawf_sc_stats->syncp, start));
 
 	return true;
 }
@@ -1161,10 +1162,10 @@ static int32_t edma_configure_clocks(void)
 }
 
 /*
- * edma_rx_flow_control_table
- *	EDMA Rx flow control sysctl table
+ * edma_sub
+ *	EDMA sub directory
  */
-static struct ctl_table edma_rx_flow_control_table[] = {
+static struct ctl_table edma_sub[] = {
 	{
 		.procname	=	"rx_fc_enable",
 		.data		=	&edma_cfg_rx_fc_enable,
@@ -1178,19 +1179,6 @@ static struct ctl_table edma_rx_flow_control_table[] = {
 		.maxlen		=	sizeof(int),
 		.mode		=	0644,
 		.proc_handler	=	edma_cfg_rx_queue_tail_drop_handler
-	},
-	{}
-};
-
-/*
- * edma_sub
- *	EDMA sub directory
- */
-static struct ctl_table edma_sub[] = {
-	{
-		.procname	=	"rx_fc",
-		.mode		=	0555,
-		.child		=	edma_rx_flow_control_table,
 	},
 	{
 		.procname	=	"rps_num_cores",
@@ -1212,32 +1200,6 @@ static struct ctl_table edma_sub[] = {
 		.maxlen         =       sizeof(int),
 		.mode           =       0644,
 		.proc_handler   =       edma_hang_recovery_handler
-	},
-	{}
-};
-
-/*
- * edma_main
- *	EDMA main directory
- */
-static struct ctl_table edma_main[] = {
-	{
-		.procname	=	"edma",
-		.mode		=	0555,
-		.child		=	edma_sub,
-	},
-	{}
-};
-
-/*
- * edma_root
- *	EDMA root directory
- */
-static struct ctl_table edma_root[] = {
-	{
-		.procname	=	"net",
-		.mode		=	0555,
-		.child		=	edma_main,
 	},
 	{}
 };
@@ -1275,7 +1237,7 @@ int edma_init(void)
 		return -EINVAL;
 	}
 
-	edma_gbl_ctx.ctl_table_hdr = register_sysctl_table(edma_root);
+	edma_gbl_ctx.ctl_table_hdr = register_sysctl("net/edma", edma_sub);
 	if (!edma_gbl_ctx.ctl_table_hdr) {
 		edma_err("sysctl table configuration failed");
 		return -EINVAL;

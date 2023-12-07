@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -24,6 +24,10 @@
 #include <linux/netdevice.h>
 #include <linux/reset.h>
 #include <linux/of_platform.h>
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(6, 6, 0))
+#include <net/gso.h>
+#endif
 #include <nss_dp_arch.h>
 #include <nss_dp_api_if.h>
 #include <nss_dp_hal_if.h>
@@ -418,5 +422,33 @@ static inline int edma_update_ring_stats(uint32_t work_to_do, uint32_t max_desc,
 
 	return 0;
 }
+
+/*
+ * edma_dp_stats_fetch_begin
+ *	fetch dp 64-bit statistics begin
+ */
+static inline unsigned int edma_dp_stats_fetch_begin(const struct u64_stats_sync *syncp)
+{
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
+	return u64_stats_fetch_begin_irq(syncp);
+#else
+	return u64_stats_fetch_begin(syncp);
+#endif
+}
+
+/*
+ * edma_dp_stats_fetch_retry
+ *	retry dp 64-bit statistics fetch
+ */
+static inline bool edma_dp_stats_fetch_retry(const struct u64_stats_sync *syncp,
+					     unsigned int start)
+{
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
+	return u64_stats_fetch_retry_irq(syncp, start);
+#else
+	return u64_stats_fetch_retry(syncp, start);
+#endif
+}
+
 
 #endif	/* __EDMA_H__ */

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -315,11 +315,10 @@ static void edma_dp_get_ndo_stats(struct nss_dp_data_plane_ctx *dpc,
 		struct edma_tx_stats txp;
 		unsigned int start;
 		pcpu_rx_stats = per_cpu_ptr(dp_info->pcpu_stats.rx_stats, i);
-
 		do {
-			start = u64_stats_fetch_begin_irq(&pcpu_rx_stats->syncp);
+			start = edma_dp_stats_fetch_begin(&pcpu_rx_stats->syncp);
 			memcpy(&rxp, pcpu_rx_stats, sizeof(*pcpu_rx_stats));
-		} while (u64_stats_fetch_retry_irq(&pcpu_rx_stats->syncp, start));
+		} while (edma_dp_stats_fetch_retry(&pcpu_rx_stats->syncp, start));
 
 		stats->stats.rx_packets += rxp.rx_pkts;
 		stats->stats.rx_bytes += rxp.rx_bytes;
@@ -331,9 +330,9 @@ static void edma_dp_get_ndo_stats(struct nss_dp_data_plane_ctx *dpc,
 		pcpu_tx_stats = per_cpu_ptr(dp_info->pcpu_stats.tx_stats, i);
 
 		do {
-			start = u64_stats_fetch_begin_irq(&pcpu_tx_stats->syncp);
+			start = edma_dp_stats_fetch_begin(&pcpu_tx_stats->syncp);
 			memcpy(&txp, pcpu_tx_stats, sizeof(*pcpu_tx_stats));
-		} while (u64_stats_fetch_retry_irq(&pcpu_tx_stats->syncp, start));
+		} while (edma_dp_stats_fetch_retry(&pcpu_tx_stats->syncp, start));
 
 		stats->stats.tx_packets += txp.tx_pkts;
 		stats->stats.tx_bytes += txp.tx_bytes;

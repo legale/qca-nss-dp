@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -121,12 +121,12 @@ static int edma_debugfs_rx_rings_stats_show(struct seq_file *m, void __attribute
 		rxfill_ring = &egc->rxfill_rings[i];
 		stats = &rxfill_ring->rx_fill_stats;
 		do {
-			start = u64_stats_fetch_begin_irq(&stats->syncp);
+			start = edma_dp_stats_fetch_begin(&stats->syncp);
 			rx_fill_stats[i].alloc_failed = stats->alloc_failed;
 			rx_fill_stats[i].page_alloc_failed = stats->page_alloc_failed;
 			memcpy(&rx_fill_stats[i].ring_stats, &stats->ring_stats,
 					sizeof(struct edma_ring_util_stats));
-		} while (u64_stats_fetch_retry_irq(&stats->syncp, start));
+		} while (edma_dp_stats_fetch_retry(&stats->syncp, start));
 	}
 
 	/*
@@ -139,13 +139,13 @@ static int edma_debugfs_rx_rings_stats_show(struct seq_file *m, void __attribute
 		rxdesc_ring = &egc->rxdesc_rings[i];
 		stats = &rxdesc_ring->rx_desc_stats;
 		do {
-			start = u64_stats_fetch_begin_irq(&stats->syncp);
+			start = edma_dp_stats_fetch_begin(&stats->syncp);
 			rx_desc_stats[i].src_port_inval = stats->src_port_inval;
 			rx_desc_stats[i].src_port_inval_type = stats->src_port_inval_type;
 			rx_desc_stats[i].src_port_inval_netdev = stats->src_port_inval_netdev;
 			memcpy(&rx_desc_stats[i].ring_stats, &stats->ring_stats,
 					sizeof(struct edma_ring_util_stats));
-		} while (u64_stats_fetch_retry_irq(&stats->syncp, start));
+		} while (edma_dp_stats_fetch_retry(&stats->syncp, start));
 	}
 
 	edma_debugfs_print_banner(m, EDMA_RX_RING_STATS_NODE_NAME);
@@ -268,12 +268,12 @@ static int edma_debugfs_tx_rings_stats_show(struct seq_file *m, void __attribute
 		txdesc_ring = &egc->txdesc_rings[i];
 		stats = &txdesc_ring->tx_desc_stats;
 		do {
-			start = u64_stats_fetch_begin_irq(&stats->syncp);
+			start = edma_dp_stats_fetch_begin(&stats->syncp);
 			tx_desc_stats[i].no_desc_avail = stats->no_desc_avail;
 			tx_desc_stats[i].tso_max_seg_exceed = stats->tso_max_seg_exceed;
 			memcpy(&tx_desc_stats[i].ring_stats, &stats->ring_stats,
 			       sizeof(struct edma_ring_util_stats));
-		} while (u64_stats_fetch_retry_irq(&stats->syncp, start));
+		} while (edma_dp_stats_fetch_retry(&stats->syncp, start));
 	}
 
 	/*
@@ -286,12 +286,12 @@ static int edma_debugfs_tx_rings_stats_show(struct seq_file *m, void __attribute
 		txcmpl_ring = &egc->txcmpl_rings[i];
 		stats = &txcmpl_ring->tx_cmpl_stats;
 		do {
-			start = u64_stats_fetch_begin_irq(&stats->syncp);
+			start = edma_dp_stats_fetch_begin(&stats->syncp);
 			tx_cmpl_stats[i].invalid_buffer = stats->invalid_buffer;
 			tx_cmpl_stats[i].errors = stats->errors;
 			tx_cmpl_stats[i].desc_with_more_bit = stats->desc_with_more_bit;
 			tx_cmpl_stats[i].no_pending_desc = stats->no_pending_desc;
-		} while (u64_stats_fetch_retry_irq(&stats->syncp, start));
+		} while (edma_dp_stats_fetch_retry(&stats->syncp, start));
 	}
 
 	edma_debugfs_print_banner(m, EDMA_TX_RING_STATS_NODE_NAME);
@@ -390,7 +390,7 @@ static int edma_debugfs_misc_stats_show(struct seq_file *m, void __attribute__((
 	for_each_possible_cpu(cpu) {
 		pcpu_misc_stats = per_cpu_ptr(edma_gbl_ctx.misc_stats, cpu);
 		do {
-			start = u64_stats_fetch_begin_irq(&pcpu_misc_stats->syncp);
+			start = edma_dp_stats_fetch_begin(&pcpu_misc_stats->syncp);
 			misc_stats->edma_misc_axi_read_err +=
 				pcpu_misc_stats->edma_misc_axi_read_err;
 			misc_stats->edma_misc_axi_write_err +=
@@ -407,7 +407,7 @@ static int edma_debugfs_misc_stats_show(struct seq_file *m, void __attribute__((
 				pcpu_misc_stats->edma_misc_tx_timeout;
 			misc_stats->edma_misc_tx_cmpl_buf_full +=
 				pcpu_misc_stats->edma_misc_tx_cmpl_buf_full;
-		} while (u64_stats_fetch_retry_irq(&pcpu_misc_stats->syncp, start));
+		} while (edma_dp_stats_fetch_retry(&pcpu_misc_stats->syncp, start));
 	}
 
 	edma_debugfs_print_banner(m, EDMA_MISC_STATS_NODE_NAME);
