@@ -443,6 +443,15 @@ static int nss_dp_fdb_event(struct switchdev_notifier_fdb_info *fdb_info,
 	if (!fdb_info->added_by_user)
 		return 0;
 
+	/*
+	 * Update FDB only for devices managed by DP driver.
+	 */
+	if (!nss_dp_is_phy_dev(dev)) {
+		netdev_dbg(dev, "FDB event on non-physical port\n");
+		ret = NOTIFY_DONE;
+		goto out;
+	}
+
 	rcu_read_lock();
 	br_dev = netdev_master_upper_dev_get_rcu(dev);
 	rcu_read_unlock();
@@ -469,6 +478,8 @@ static int nss_dp_fdb_event(struct switchdev_notifier_fdb_info *fdb_info,
 			ret = notifier_from_errno(-EIO);
 			goto out;
 		}
+
+		netdev_dbg(dev, "static fdb entry added MAC:%pM ID:%d\n", fdb_info->addr, dp_priv->macid);
 		break;
 
 	case SWITCHDEV_FDB_DEL_TO_DEVICE:
@@ -480,6 +491,8 @@ static int nss_dp_fdb_event(struct switchdev_notifier_fdb_info *fdb_info,
 			ret = notifier_from_errno(-EIO);
 			goto out;
 		}
+
+		netdev_dbg(dev, "static fdb entry deleted MAC:%pM ID:%d\n", fdb_info->addr, dp_priv->macid);
 		break;
 	}
 
