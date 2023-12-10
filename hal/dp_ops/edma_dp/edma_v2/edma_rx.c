@@ -336,6 +336,20 @@ static void edma_rx_handle_wifi_qos_packets(struct edma_gbl_ctx *egc, struct edm
 
 		edma_debug("%px : SAWF mark configured = 0x%x\n", egc, skb->mark);
 		break;
+
+	case PPE_DRV_TREE_ID_TYPE_WIFI_TID:
+		/*
+		 * In case of HLOS TID OVERRIDE MODE, fetch the metadata from Tree ID.
+		 */
+		wifi_qos = EDMA_RXDESC_WIFI_QOS_GET(rxdesc_head);
+
+		/*
+		 * Configure skb->skb_priority with metadata.
+		 */
+		skb->priority = wifi_qos;
+		edma_debug("%px : HLOS TID OVERRIDE priority configured = 0x%d\n", egc, skb->priority);
+		break;
+
 	default:
 		edma_debug("%p : Invalid tree-id type = %u\n", egc, tree_id_type);
 		break;
