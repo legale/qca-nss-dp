@@ -266,6 +266,7 @@ struct nss_dp_dev {
 #ifdef NSS_DP_MHT_SW_PORT_MAP
 	bool nss_dp_mht_dev;		/* Netdevice belongs to MHT switch */
 #endif
+	uint32_t fixed_link_speed;	/* Fixed link speed for the port connected to the switch */
 };
 
 /*
