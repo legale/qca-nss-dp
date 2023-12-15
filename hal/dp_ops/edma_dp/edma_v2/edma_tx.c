@@ -635,9 +635,10 @@ enum edma_tx edma_tx_ring_xmit(struct net_device *netdev, struct nss_dp_vp_tx_in
 {
 	struct nss_dp_dev *dp_dev = netdev_priv(netdev);
 	struct edma_tx_desc_stats *txdesc_stats = &txdesc_ring->tx_desc_stats;
-	uint32_t hw_next_to_use = 0;
+	uint32_t hw_next_to_use = 0, cons_idx = 0, work_to_do = 0;
 	uint32_t num_tx_desc_needed = 0, num_desc_filled = 0;
 	struct edma_pri_txdesc *txdesc = NULL;
+	struct edma_gbl_ctx *egc = &edma_gbl_ctx;
 
 	hw_next_to_use = txdesc_ring->prod_idx;
 
@@ -651,6 +652,13 @@ enum edma_tx edma_tx_ring_xmit(struct net_device *netdev, struct nss_dp_vp_tx_in
 			++txdesc_stats->no_desc_avail;
 			u64_stats_update_end(&txdesc_stats->syncp);
 			return EDMA_TX_FAIL_NO_DESC;
+		}
+
+		if (unlikely(egc->enable_ring_util_stats)) {
+			cons_idx = edma_reg_read(EDMA_REG_TXDESC_CONS_IDX(txdesc_ring->id)) & EDMA_TXDESC_CONS_IDX_MASK;
+			work_to_do = EDMA_DESC_AVAIL_COUNT(txdesc_ring->prod_idx, cons_idx, txdesc_ring->count);
+			edma_update_ring_stats(work_to_do, txdesc_ring->count,
+					       &txdesc_stats->ring_stats);
 		}
 	}
 
