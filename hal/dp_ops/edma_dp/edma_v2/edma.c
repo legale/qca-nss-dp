@@ -41,6 +41,8 @@
 #include "edma_procfs.h"
 #include "nss_dp_dev.h"
 
+uint32_t edma_hang_recover = 0;
+
 /*
  * EDMA hardware instance
  */
@@ -48,6 +50,22 @@ struct edma_gbl_ctx edma_gbl_ctx;
 
 static char edma_txcmpl_irq_name[EDMA_MAX_TXCMPL_RINGS][EDMA_IRQ_NAME_SIZE];
 static char edma_rxdesc_irq_name[EDMA_MAX_RXDESC_RINGS][EDMA_IRQ_NAME_SIZE];
+
+char *argv[] = {"/usr/bin/edma_recover.sh", NULL };
+
+/*
+ * edma_recovery_work()
+ *      Call usermodehelper function to execute edma_recovery user script.
+ */
+static void edma_recovery_work(struct work_struct *work)
+{
+        int ret;
+
+        ret = call_usermodehelper(argv[0], argv, NULL, UMH_WAIT_PROC);
+        if(ret < 0){
+                pr_err("Failed to run EDMA recovery script: %d\n", ret);
+        }
+}
 
 #if defined(NSS_DP_POINT_OFFLOAD)
 /*
@@ -1195,6 +1213,13 @@ static struct ctl_table edma_sub[] = {
 		.mode		=	0644,
 		.proc_handler	=	edma_cfg_rx_rps_bitmap
 	},
+	{
+		.procname       =       "edma_hang_recover",
+		.data           =       &edma_hang_recover,
+		.maxlen         =       sizeof(int),
+		.mode           =       0644,
+		.proc_handler   =       edma_hang_recovery_handler
+	},
 	{}
 };
 
@@ -1352,6 +1377,14 @@ int edma_init(void)
 	 * Initialize the procf entries for enabling EDMA ring stats
 	 */
 	edma_procfs_init();
+
+	/*
+         * Initialize the EDMA global context work task with the edma_recovery_work function
+         * which will trigger the edma_hang_recovery_and_reg_dump user script using call_usermodehelper function.
+         */
+        if(nss_dp_recovery_en){
+                INIT_WORK(&edma_gbl_ctx.work, edma_recovery_work);
+        }
 
 	return 0;
 
@@ -1598,4 +1631,271 @@ rx_desc_ring_intr_req_fail:
 	}
 
 	return -1;
+}
+
+/*
+ * edma_recovery_cleanup()
+ *	EDMA cleanup for EDMA recovery
+ */
+static void edma_recovery_cleanup(bool is_dp_override)
+{
+	/*
+	 * TODO: Check with HW team about the state of in-flight
+	 * packets when the descriptor rings are disabled.
+	 */
+	edma_cfg_tx_rings_disable(&edma_gbl_ctx);
+	edma_cfg_rx_rings_disable(&edma_gbl_ctx);
+
+	/*
+	 * Remove interrupt handlers and NAPI
+	 */
+	if (edma_gbl_ctx.napi_added) {
+		uint32_t i;
+
+		/*
+		 * Free IRQ for TXCMPL rings
+		 */
+		for (i = 0; i < edma_gbl_ctx.num_txcmpl_rings; i++) {
+			synchronize_irq(edma_gbl_ctx.txcmpl_intr[i]);
+
+			free_irq(edma_gbl_ctx.txcmpl_intr[i],
+					(void *)&(edma_gbl_ctx.txcmpl_rings[i]));
+		}
+
+		/*
+		 * Free IRQ for RXDESC rings
+		 */
+		for (i = 0; i < edma_gbl_ctx.num_rxdesc_rings; i++) {
+			synchronize_irq(edma_gbl_ctx.rxdesc_intr[i]);
+			free_irq(edma_gbl_ctx.rxdesc_intr[i],
+					(void *)&(edma_gbl_ctx.rxdesc_rings[i]));
+		}
+
+		/*
+		 * Free Misc IRQ
+		 */
+		synchronize_irq(edma_gbl_ctx.misc_intr);
+		free_irq(edma_gbl_ctx.misc_intr, (void *)(edma_gbl_ctx.pdev));
+
+		edma_cfg_rx_napi_delete(&edma_gbl_ctx);
+		edma_cfg_tx_napi_delete(&edma_gbl_ctx);
+		edma_gbl_ctx.napi_added = false;
+	}
+
+	/*
+	 * Disable EDMA only at module exit time.
+	 */
+	if (!is_dp_override) {
+		edma_disable_port();
+	}
+
+	/*
+	 * cleanup rings and free
+	 */
+	edma_cfg_tx_rings_cleanup(&edma_gbl_ctx);
+	edma_cfg_rx_rings_cleanup(&edma_gbl_ctx);
+
+	iounmap(edma_gbl_ctx.reg_base);
+	release_mem_region((edma_gbl_ctx.reg_resource)->start,
+			resource_size(edma_gbl_ctx.reg_resource));
+
+	/*
+	 * Mark initialize false, so that we do not
+	 * try to cleanup again
+	 */
+	edma_gbl_ctx.edma_initialized = false;
+}
+
+/*
+ * edma_recovery_setup()
+ *	EDMA setup for EDMA recovery
+ */
+static int edma_recovery_setup(void)
+{
+	int ret = 0;
+	struct resource res_edma;
+
+	edma_init_ring_maps();
+
+	/*
+	 * Get all the DTS data needed
+	 */
+	if (edma_of_get_pdata(&res_edma) < 0) {
+		edma_err("Unable to get EDMA DTS data.\n");
+		return -EINVAL;
+	}
+
+	if (!edma_validate_desc_map()){
+		edma_err("Incorrect desc map received\n");
+		return -EINVAL;
+	}
+
+	/*
+	 * Request memory region for EDMA registers
+	 */
+	edma_gbl_ctx.reg_resource = request_mem_region(res_edma.start,
+			resource_size(&res_edma),
+			EDMA_DEVICE_NODE_NAME);
+	if (!edma_gbl_ctx.reg_resource) {
+		edma_err("Unable to request EDMA register memory.\n");
+		unregister_sysctl_table(edma_gbl_ctx.ctl_table_hdr);
+		edma_gbl_ctx.ctl_table_hdr = NULL;
+		return -EFAULT;
+	}
+
+	/*
+	 * Remap register resource
+	 */
+	edma_gbl_ctx.reg_base = ioremap((edma_gbl_ctx.reg_resource)->start,
+			resource_size(edma_gbl_ctx.reg_resource));
+	if (!edma_gbl_ctx.reg_base) {
+		edma_err("Unable to remap EDMA register memory.\n");
+		ret = -EFAULT;
+		goto edma_init_remap_fail;
+	}
+
+	/*
+	 * Configure the EDMA common clocks
+	 */
+	ret = edma_configure_clocks();
+	if (ret) {
+		edma_err("Error in configuring the common EDMA clocks\n");
+		ret = -EFAULT;
+		goto edma_hw_init_fail;
+	}
+
+	edma_info("EDMA common clocks are configured\n");
+
+	if (edma_hw_init(&edma_gbl_ctx) != 0) {
+		edma_err("Error in edma initialization\n");
+		ret = -EFAULT;
+		goto edma_hw_init_fail;
+	}
+
+	dp_global_ctx.common_init_done = true;
+
+	return 0;
+
+edma_hw_init_fail:
+	iounmap(edma_gbl_ctx.reg_base);
+
+edma_init_remap_fail:
+	release_mem_region((edma_gbl_ctx.reg_resource)->start,
+			resource_size(edma_gbl_ctx.reg_resource));
+	unregister_sysctl_table(edma_gbl_ctx.ctl_table_hdr);
+	edma_gbl_ctx.ctl_table_hdr = NULL;
+
+	return ret;
+
+}
+
+/*
+ * edma_recovery_deinit()
+ *	EDMA remove for EDMA recovery
+ */
+static int edma_recovery_deinit(void)
+{
+	reset_control_put(edma_gbl_ctx.hw_rst);
+	atomic_set(&edma_gbl_ctx.active_port_count, 0);
+
+	if (dp_global_ctx.common_init_done) {
+		edma_recovery_cleanup(false);
+		dp_global_ctx.common_init_done = false;
+	}
+
+	return 0;
+}
+
+/*
+ * edma_recovery_init()
+ *	EDMA reinit for EDMA recovery
+ */
+static int edma_recovery_init(void)
+{
+	uint32_t ret;
+	uint32_t i;
+	uint32_t j;
+	struct nss_dp_dev *dp_priv;
+
+	/*
+	 * Re-initialize EDMA
+	 */
+	ret = edma_recovery_setup();
+	if (ret) {
+		edma_hang_recover = 0;
+		edma_err("EDMA recovery setup failed\n");
+		return -EINVAL;
+	}
+
+	for (i = 0; i < NSS_DP_HAL_MAX_PORTS; i++) {
+		dp_priv = dp_global_ctx.nss_dp[i];
+
+		edma_cfg_rx_napi_add(&edma_gbl_ctx, dp_priv->netdev);
+		edma_cfg_tx_napi_add(&edma_gbl_ctx, dp_priv->netdev, dp_priv->macid);
+
+		if (!edma_gbl_ctx.napi_added) {
+			edma_irq_init();
+		}
+
+		edma_gbl_ctx.napi_added = true;
+
+		for_each_possible_cpu(j) {
+			struct nss_dp_dev *dp_dev = (struct nss_dp_dev *)netdev_priv(dp_priv->netdev);
+			struct edma_txdesc_ring *txdesc_ring;
+			uint32_t txdesc_ring_id;
+			uint32_t txdesc_start = edma_gbl_ctx.txdesc_ring_start;
+
+			txdesc_ring_id = edma_gbl_ctx.tx_map[nss_dp_get_idx_from_macid(dp_priv->macid)][j];
+			txdesc_ring = &edma_gbl_ctx.txdesc_rings[txdesc_ring_id - txdesc_start];
+			dp_dev->dp_info.txr_map[0][j] = txdesc_ring;
+		}
+	}
+
+	return 0;
+}
+
+/*
+ * edma_hang_recovery()
+ *	API to recover from EDMA hang
+ */
+static int edma_hang_recovery(void)
+{
+	/*
+	 * De-initializing EDMA for hang recovery
+	 */
+	edma_recovery_deinit();
+
+	/*
+	 * Initializing EDMA for hang recovery
+	 */
+	edma_recovery_init();
+
+	/*
+	 * Resetting the `edma_hang_recover` flag to indicate recovery completion
+	 */
+	edma_hang_recover = 0;
+
+        return 0;
+}
+
+/*
+ * edma_hang_recovery_handler()
+ *	to trigger recovery API for EDMA hang
+ */
+int edma_hang_recovery_handler(struct ctl_table *table, int write,
+                void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	int ret;
+
+	ret = proc_dointvec(table, write, buffer, lenp, ppos);
+
+	if (!write) {
+		return ret;
+	}
+
+	if(edma_hang_recover){
+		edma_hang_recovery();
+	}
+
+	return ret;
 }
