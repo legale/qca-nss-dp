@@ -129,7 +129,7 @@ static void edma_cfg_tx_desc_ring_cleanup(struct edma_gbl_ctx *egc,
 {
 	struct sk_buff *skb = NULL;
 	struct edma_pri_txdesc *txdesc = NULL;
-	uint32_t prod_idx, cons_idx, data;
+	uint32_t prod_idx, cons_idx, data, cons_idx_prev;;
 
 	/*
 	 * Free any buffers assigned to any descriptors
@@ -138,7 +138,7 @@ static void edma_cfg_tx_desc_ring_cleanup(struct edma_gbl_ctx *egc,
 	prod_idx = data & EDMA_TXDESC_PROD_IDX_MASK;
 
 	data = edma_reg_read(EDMA_REG_TXDESC_CONS_IDX(txdesc_ring->id));
-	cons_idx = data & EDMA_TXDESC_CONS_IDX_MASK;
+	cons_idx_prev = cons_idx = data & EDMA_TXDESC_CONS_IDX_MASK;
 
 	/*
 	 * Walk active list, obtain skb from descriptor and free it
@@ -150,6 +150,8 @@ static void edma_cfg_tx_desc_ring_cleanup(struct edma_gbl_ctx *egc,
 
 		cons_idx = ((cons_idx + 1) & EDMA_TX_RING_SIZE_MASK);
 	}
+
+	edma_reg_write(EDMA_REG_TXDESC_PROD_IDX(txdesc_ring->id), cons_idx_prev);
 
 	/*
 	 * Free Tx ring descriptors

@@ -359,6 +359,7 @@ struct edma_gbl_ctx {
 };
 
 extern struct edma_gbl_ctx edma_gbl_ctx;
+extern uint32_t edma_hang_recover;
 
 int edma_irq_init(void);
 irqreturn_t edma_misc_handle_irq(int irq, void *ctx);

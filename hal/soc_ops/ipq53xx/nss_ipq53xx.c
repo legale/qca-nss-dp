@@ -19,6 +19,7 @@
 #include <linux/reset.h>
 #include <nss_dp_arch.h>
 #include "nss_dp_hal.h"
+#include "edma.h"
 
 /*
  * nss_dp_hal_nsm_sawf_sc_stats_read()
@@ -194,9 +195,32 @@ int32_t nss_dp_hal_configure_clocks(void *ctx)
  */
 int32_t nss_dp_hal_hw_reset(void *ctx)
 {
+	struct reset_control *edma_hw_rst;
+	struct platform_device *pdev = (struct platform_device *)ctx;
+
+	if (!edma_hang_recover)
+		return 0;
+
+	edma_hw_rst = devm_reset_control_get(&pdev->dev, EDMA_HW_RESET_ID);
+	if (IS_ERR(edma_hw_rst)) {
+		return -EINVAL;
+	}
+
 	/*
-	 * PPE Reset will take care of EDMA Hardware Reset for ipq53xx
+	 * Store the obtained hardware reset handle (`edma_hw_rst`) in the global context
+	 * (`edma_gbl_ctx`) for future use. This allows for centralized reset control
+	 * throughout the driver.
+	 *
+	 * TODO: Revisit if this global storage is actually required.
 	 */
+	edma_gbl_ctx.hw_rst = edma_hw_rst;
+
+	reset_control_assert(edma_hw_rst);
+	udelay(100);
+
+	reset_control_deassert(edma_hw_rst);
+	udelay(100);
+
 	return 0;
 }
 

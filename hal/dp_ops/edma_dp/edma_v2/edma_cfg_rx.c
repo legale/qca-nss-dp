@@ -53,13 +53,13 @@ uint32_t edma_cfg_rx_rps_bitmap_cores = EDMA_RX_DEFAULT_BITMAP;
 static void edma_cfg_rx_fill_ring_cleanup(struct edma_gbl_ctx *egc,
 				struct edma_rxfill_ring *rxfill_ring)
 {
-	uint16_t cons_idx, curr_idx;
+	uint16_t cons_idx, curr_idx, cons_idx_prev;
 	uint32_t reg_data;
 
 	/*
 	 * Get RXFILL ring producer index
 	 */
-	curr_idx = rxfill_ring->prod_idx & EDMA_RXFILL_PROD_IDX_MASK;
+	cons_idx_prev = curr_idx = rxfill_ring->prod_idx & EDMA_RXFILL_PROD_IDX_MASK;
 
 	/*
 	 * Get RXFILL ring consumer index
@@ -89,6 +89,8 @@ static void edma_cfg_rx_fill_ring_cleanup(struct edma_gbl_ctx *egc,
 		}
 		dev_kfree_skb_any(skb);
 	}
+
+	edma_reg_write(EDMA_REG_RXFILL_PROD_IDX(rxfill_ring->ring_id), cons_idx_prev);
 
 	/*
 	 * Free RXFILL ring descriptors
