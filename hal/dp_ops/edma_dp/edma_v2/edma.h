@@ -47,6 +47,7 @@
 #endif
 
 #define EDMA_HW_RESET_ID		"edma_rst"
+#define EDMA_CFG_RESET_ID		"edma_cfg_rst"
 #define EDMA_DEVICE_NODE_NAME		"edma"
 #define EDMA_START_GMACS		NSS_DP_HAL_START_IFNUM
 #define EDMA_MAX_GMACS			NSS_DP_HAL_MAX_PORTS
@@ -222,6 +223,8 @@ struct edma_gbl_ctx {
 			/* Hardware reset
  			 * TODO - Revisit if this hardware reset is actually required.
 			 */
+	struct reset_control *cfg_rst;
+			/* EDMA configuration reset */
 	struct platform_device *pdev;
 			/* Platform device */
 	void __iomem *reg_base;

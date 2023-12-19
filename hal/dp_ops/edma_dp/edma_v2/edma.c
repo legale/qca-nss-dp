@@ -1796,6 +1796,11 @@ edma_init_remap_fail:
 static int edma_recovery_deinit(void)
 {
 	reset_control_put(edma_gbl_ctx.hw_rst);
+
+#if defined(NSS_DP_IPQ53XX)
+	reset_control_put(edma_gbl_ctx.cfg_rst);
+#endif
+
 	atomic_set(&edma_gbl_ctx.active_port_count, 0);
 
 	if (dp_global_ctx.common_init_done) {

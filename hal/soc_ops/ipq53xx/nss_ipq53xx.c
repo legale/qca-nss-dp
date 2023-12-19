@@ -195,7 +195,7 @@ int32_t nss_dp_hal_configure_clocks(void *ctx)
  */
 int32_t nss_dp_hal_hw_reset(void *ctx)
 {
-	struct reset_control *edma_hw_rst;
+	struct reset_control *edma_hw_rst, *edma_cfg_rst;
 	struct platform_device *pdev = (struct platform_device *)ctx;
 
 	if (!edma_hang_recover)
@@ -206,6 +206,11 @@ int32_t nss_dp_hal_hw_reset(void *ctx)
 		return -EINVAL;
 	}
 
+	edma_cfg_rst = devm_reset_control_get(&pdev->dev, EDMA_CFG_RESET_ID);
+        if (IS_ERR(edma_hw_rst)) {
+                return -EINVAL;
+        }
+
 	/*
 	 * Store the obtained hardware reset handle (`edma_hw_rst`) in the global context
 	 * (`edma_gbl_ctx`) for future use. This allows for centralized reset control
@@ -215,11 +220,27 @@ int32_t nss_dp_hal_hw_reset(void *ctx)
 	 */
 	edma_gbl_ctx.hw_rst = edma_hw_rst;
 
+	/*
+         * Store the obtained edma configuration reset handle (`edma_cfg_rst`) in the global context
+         * (`edma_gbl_ctx`) for future use. This allows for centralized configuration reset control
+         * throughout the driver.
+	 */
+	edma_gbl_ctx.cfg_rst = edma_cfg_rst;
+
 	reset_control_assert(edma_hw_rst);
 	udelay(100);
 
 	reset_control_deassert(edma_hw_rst);
 	udelay(100);
+
+	/*
+	 * EDMA configuration reset.
+	 */
+	reset_control_assert(edma_cfg_rst);
+        udelay(100);
+
+        reset_control_deassert(edma_cfg_rst);
+        udelay(100);
 
 	return 0;
 }
