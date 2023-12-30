@@ -1549,31 +1549,6 @@ int edma_cfg_rx_queue_tail_drop_handler(struct ctl_table *table, int write,
 }
 
 /*
- * edma_cfg_rx_inval()
- *	Invalidate the secondary descriptor.
- */
-int edma_cfg_rx_inval(struct ctl_table *table, int write,
-		void __user *buffer, size_t *lenp, loff_t *ppos)
-{
-	int ret;
-
-	ret = proc_dointvec(table, write, buffer, lenp, ppos);
-
-	if (!write) {
-		return ret;
-	}
-
-	if ((edma_cfg_rx_sec_desc_inval != 0) && (edma_cfg_rx_sec_desc_inval != 1)) {
-		edma_err("Incorrect inval value: %d. Setting it to default"
-			       " value: %d", edma_cfg_rx_sec_desc_inval, 0);
-		edma_cfg_rx_sec_desc_inval = 0;
-	}
-
-	edma_warn("EDMA secondary descriptor invalidation option set to %d \n", edma_cfg_rx_sec_desc_inval);
-	return ret;
-}
-
-/*
  * edma_cfg_rx_rps()
  *	API to configure RPS hash mapping for the given number of cores
  */
