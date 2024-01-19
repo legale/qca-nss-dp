@@ -15,6 +15,10 @@ ifneq ($(CONFIG_NET_SWITCHDEV),)
 qca-nss-dp-objs += nss_dp_switchdev.o
 endif
 
+ifeq ($(SoC),$(filter $(SoC),ipq53xx))
+qca-nss-dp-objs += nss_dp_eawtp.o
+endif
+
 NSS_DP_INCLUDE = -I$(obj)/include -I$(obj)/exports -I$(obj)/hal/include \
 		 -I$(obj)/hal/dp_ops/include
 

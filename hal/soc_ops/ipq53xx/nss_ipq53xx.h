@@ -30,7 +30,17 @@
 #define NSS_DP_HAL_MHT_SWT_MAX_PORTS	4
 #define NSS_DP_HAL_MAX_TX_PORTS		(NSS_DP_HAL_MAX_PORTS + NSS_DP_HAL_MHT_SWT_MAX_PORTS - 1)
 #define NSS_DP_MHT_MAP_IDX		2
+
+/*
+ * Switch ID for IPQ53xx
+ */
+#define NSS_DP_MHT_SW_ID	1
 #endif
+
+/*
+ * Default device ID for IPQ53xx
+ */
+#define NSS_DP_DEV_ID	0
 
 /*
  * Maximum supported GSO segments
