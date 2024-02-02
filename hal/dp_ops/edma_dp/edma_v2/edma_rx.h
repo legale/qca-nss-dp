@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -40,12 +40,15 @@
 #define EDMA_RXDESC_PRI_DESC(R, i)	EDMA_GET_PDESC(R, i, struct edma_rxdesc_desc)
 #define EDMA_RXDESC_SEC_DESC(R, i)	EDMA_GET_SDESC(R, i, struct edma_rxdesc_sec_desc)
 
+/*
+ * TODO - Make this a tunable parameter using module-param.
+ */
 #if defined(NSS_DP_MEM_PROFILE_LOW)
 #define EDMA_RX_RING_SIZE		512
 #elif defined(NSS_DP_MEM_PROFILE_MEDIUM)
 #define EDMA_RX_RING_SIZE		1024
 #else
-#define EDMA_RX_RING_SIZE		2048
+#define EDMA_RX_RING_SIZE		4096
 #endif
 
 #define EDMA_RX_RING_SIZE_MASK		(EDMA_RX_RING_SIZE - 1)
