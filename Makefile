@@ -106,6 +106,10 @@ ccflags-y += -DNSS_DP_EDMA_SKIP_FOUR_PPEDS_NODES
 ccflags-y += -DNSS_DP_EDMA_MHT_SW_WITH_VP_RING
 endif
 
+ifeq ($(higher-address-support),y)
+ccflags-y += -DEDMA_40BIT_SUPPORT
+endif
+
 ccflags-y += $(NSS_DP_INCLUDE)
 ccflags-y += -Wall -Werror
 ccflags-y += -DEDMA_DEBUG_LEVEL=2

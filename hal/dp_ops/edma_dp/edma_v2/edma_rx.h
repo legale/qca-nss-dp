@@ -136,9 +136,13 @@
 						((uint64_t)((desc)->word3) << 0x20)))
 
 #define EDMA_RXFILL_PACKET_LEN_SET(desc, len)	{ \
-	(((desc)->word1) = (uint32_t)((((uint32_t)len) << EDMA_RXFILL_BUF_SIZE_SHIFT) & 0xFFFF0000)); \
+	(((desc)->word1) = (uint32_t)((((desc)->word1) & ~0xFFFF0000) | ((((uint32_t)len) << EDMA_RXFILL_BUF_SIZE_SHIFT) & 0xFFFF0000))); \
 }
+
 #define EDMA_RXFILL_BUFFER_ADDR_SET(desc, addr)	(((desc)->word0) = (uint32_t)(addr))
+#define EDMA_RXFILL_BUFFER_ADDR_HI_SET(desc, addr)	{ \
+	(((desc)->word1) = (((dma_addr_t)(addr) >> 0x20) & 0x000000FF)); \
+}
 #define EDMA_RXDESC_SC_CC_VALID_GET(desc)	((le32_to_cpu((desc)->word1)) & 0x01FF1000)
 #define EDMA_RXDESC_CPU_CODE_VALID_GET(desc)	(((le32_to_cpu((desc)->word1)) & 0x00001000) >> 12)
 #define EDMA_RXDESC_SERVICE_CODE_GET(desc)	(((le32_to_cpu((desc)->word1)) & 0x01FF0000) >> 16)

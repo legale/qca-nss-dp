@@ -267,6 +267,7 @@ static uint32_t edma_tx_skb_nr_frags(struct edma_txdesc_ring *txdesc_ring, struc
 	uint8_t i = 0;
 	uint32_t nr_frags = 0, buf_len = 0, num_descs = 0, start_idx = 0, end_idx = 0;
 	struct edma_pri_txdesc *txd = *txdesc;
+	dma_addr_t buff_addr;
 
 	/*
 	 * Hold onto the index mapped to *txdesc.
@@ -304,7 +305,13 @@ static uint32_t edma_tx_skb_nr_frags(struct edma_txdesc_ring *txdesc_ring, struc
 
 		txd = EDMA_TXDESC_PRI_DESC(txdesc_ring, *hw_next_to_use);
 		edma_tx_desc_init(txd);
-		EDMA_TXDESC_BUFFER_ADDR_SET(txd, (dma_addr_t)virt_to_phys(skb_frag_address(frag)));
+		buff_addr = (dma_addr_t)virt_to_phys(skb_frag_address(frag));
+		EDMA_TXDESC_BUFFER_ADDR_SET(txd, buff_addr);
+
+#ifdef EDMA_40BIT_SUPPORT
+		EDMA_TXDESC_BUFFER_ADDR_HI_SET(txd, buff_addr);
+#endif
+
 		dmac_clean_range_no_dsb((void *)skb_frag_address(frag),
 				(void *)(skb_frag_address(frag) + buf_len));
 
@@ -442,6 +449,7 @@ static struct edma_pri_txdesc *edma_tx_skb_first_desc(struct nss_dp_dev *dp_dev,
 {
 	uint32_t buf_len = 0;
 	struct edma_pri_txdesc *txd = NULL;
+	dma_addr_t buff_addr;
 
 	/*
 	 * Get the packet length
@@ -455,7 +463,13 @@ static struct edma_pri_txdesc *edma_tx_skb_first_desc(struct nss_dp_dev *dp_dev,
 	/*
 	 * Set the data pointer as the buffer address in the descriptor.
 	 */
-	EDMA_TXDESC_BUFFER_ADDR_SET(txd, (dma_addr_t)virt_to_phys(skb->data));
+	buff_addr = (dma_addr_t)virt_to_phys(skb->data);
+	EDMA_TXDESC_BUFFER_ADDR_SET(txd, buff_addr);
+
+#ifdef EDMA_40BIT_SUPPORT
+	EDMA_TXDESC_BUFFER_ADDR_HI_SET(txd, buff_addr);
+#endif
+
 	dmac_clean_range_no_dsb((void *)skb->data, (void *)(skb->data + buf_len));
 
 	if (dptxi) {
@@ -486,6 +500,7 @@ static uint32_t edma_tx_skb_sg_fill_desc(struct nss_dp_dev *dp_dev, struct edma_
 	struct sk_buff *iter_skb = NULL;
 	uint32_t num_sg_frag_list = 0;
 	struct edma_pri_txdesc *txd = *txdesc;
+	dma_addr_t buff_addr;
 
 	/*
 	 * Head skb processed already
@@ -535,7 +550,13 @@ static uint32_t edma_tx_skb_sg_fill_desc(struct nss_dp_dev *dp_dev, struct edma_
 
 			txd = EDMA_TXDESC_PRI_DESC(txdesc_ring, *hw_next_to_use);
 			edma_tx_desc_init(txd);
-			EDMA_TXDESC_BUFFER_ADDR_SET(txd, (dma_addr_t)virt_to_phys(iter_skb->data));
+			buff_addr = (dma_addr_t)virt_to_phys(iter_skb->data);
+			EDMA_TXDESC_BUFFER_ADDR_SET(txd, buff_addr);
+
+#ifdef EDMA_40BIT_SUPPORT
+			EDMA_TXDESC_BUFFER_ADDR_HI_SET(txd, buff_addr);
+#endif
+
 			dmac_clean_range_no_dsb((void *)iter_skb->data,
 					(void *)(iter_skb->data + buf_len));
 

@@ -143,7 +143,7 @@
 
 #if defined(NSS_DP_EDMA_REG_WORD_INDEXING)
 #define EDMA_REG_RXDESC_BA_HIGH(n)	(0x3902C + (0x1000 * (n)))
-#define EDMA_REG_PH_BA_HIGH(n)		(0x39030 + (0x1000 * (n)))
+#define EDMA_REG_RXDESC_PREHEADER_BA_HIGH(n)		(0x39030 + (0x1000 * (n)))
 #define EDMA_REG_RXDESC_INDEX_RESET(n)	(0x39034 + (0x1000 * (n)))
 #define EDMA_REG_RXDESC_UPLOAD_IDX_TRIG(n)	(0x39038 + (0x1000 * (n)))
 #define EDMA_REG_RXDESC_UPLOAD_IDX_ADDR_L(n)	(0x3903C + (0x1000 * (n)))
@@ -280,11 +280,13 @@
  * EDMA RXDESC base address mask
  */
 #define EDMA_RXDESC_BA_MASK			0xffffffff
+#define EDMA_RXDESC_BA_HIGHER_MASK		0xff
 
 /*
  * EDMA RXDESC pre-header base address mask
  */
 #define EDMA_RXDESC_PREHEADER_BA_MASK		0xffffffff
+#define EDMA_RXDESC_PREHEADER_BA_HIGHER_MASK	0xff
 
 /*
  * EDMA_REG_AXIW_CTRL_REG
@@ -594,6 +596,7 @@
 #define EDMA_TXDESC_DATA_LENGTH_MASK		0x1ffff
 
 #define EDMA_RING_DMA_MASK			0xffffffff
+#define EDMA_RING_DMA_HIGHER_MASK		0xff
 
 /*
  * RXDESC shift values

@@ -267,8 +267,14 @@ static inline int edma_rx_alloc_buffer_list(struct edma_rxfill_ring *rxfill_ring
 			dmac_inv_range_no_dsb(page_addr, (page_addr + PAGE_SIZE));
 		}
 
+		/*
+		 * Set up Buffer high address.
+		 */
 		EDMA_RXFILL_BUFFER_ADDR_SET(rxfill_desc, buff_addr);
 
+#ifdef EDMA_40BIT_SUPPORT
+		EDMA_RXFILL_BUFFER_ADDR_HI_SET(rxfill_desc, buff_addr);
+#endif
 		/*
 		 * Store skb in opaque
 		 */
@@ -280,8 +286,7 @@ static inline int edma_rx_alloc_buffer_list(struct edma_rxfill_ring *rxfill_ring
 		/*
 		 * Save buffer size in RXFILL descriptor
 		 */
-		EDMA_RXFILL_PACKET_LEN_SET(rxfill_desc,
-				((uint32_t)(buf_len) & EDMA_RXFILL_BUF_SIZE_MASK));
+		EDMA_RXFILL_PACKET_LEN_SET(rxfill_desc, ((uint32_t)(buf_len) & EDMA_RXFILL_BUF_SIZE_MASK));
 
 		/*
 		 * Invalidate skb->data

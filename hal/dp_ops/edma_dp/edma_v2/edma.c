@@ -368,6 +368,10 @@ static int edma_of_get_pdata(struct resource *edma_res)
 	int ret;
 	uint32_t i, j;
 
+#ifdef EDMA_40BIT_SUPPORT
+	struct platform_device *pdev;
+#endif
+
 	/*
 	 * Find EDMA node in device tree
 	 */
@@ -398,6 +402,18 @@ static int edma_of_get_pdata(struct resource *edma_res)
 			  EDMA_DEVICE_NODE_NAME"\n");
 		return -EINVAL;
 	}
+
+	/*
+	 * Set the DMA to allocate memory from beyond 4GB
+	 */
+#ifdef EDMA_40BIT_SUPPORT
+	pdev = edma_gbl_ctx.pdev;
+	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
+	if (ret) {
+		edma_err("dma_set_mask_and_coherent failed for mask 64 with ret %d\n", ret);
+		return -ENOMEM;
+	}
+#endif
 
 	/*
 	 * Get id of first TXDESC ring

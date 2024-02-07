@@ -95,7 +95,9 @@
 #define EDMA_TXDESC_SERVICE_CODE_MASK	(0x1FF << EDMA_TXDESC_SERVICE_CODE_SHIFT)
 #define EDMA_TXDESC_SERVICE_CODE_SET(desc, x)	((desc)->word1 |= (((x) << EDMA_TXDESC_SERVICE_CODE_SHIFT) & EDMA_TXDESC_SERVICE_CODE_MASK))
 #define EDMA_TXDESC_BUFFER_ADDR_SET(desc, addr)	(((desc)->word0) = (addr))
-
+#define EDMA_TXDESC_BUFFER_ADDR_HI_SET(desc, addr)	{ \
+	(((desc)->word1) |= (((dma_addr_t)(addr) >> 0x20) & 0x000000FF)); \
+}
 #define EDMA_TXDESC_INT_PRI_VALID_SHIFT	25
 #define EDMA_TXDESC_INT_PRI_SHIFT	26
 #define EDMA_TXDESC_INT_PRI_VALID	(1 << EDMA_TXDESC_INT_PRI_VALID_SHIFT)
