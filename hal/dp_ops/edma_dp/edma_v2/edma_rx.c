@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -30,10 +30,35 @@
 extern nss_dp_vp_rx_cb_t nss_dp_vp_rx_reg_cb;
 
 /*
+ * edma_rx_checksum_verify()
+ *	get hw checksum status
+ */
+static inline uint8_t edma_rx_checksum_verify(struct edma_rxdesc_desc *rxdesc_desc,
+							struct sk_buff* skb)
+{
+	uint8_t pid = EDMA_RXDESC_PID_GET(rxdesc_desc);
+
+	skb_checksum_none_assert(skb);
+
+	if (likely(EDMA_RX_PID_IS_IPV4(pid))) {
+		if (likely(EDMA_RXDESC_L3CSUM_STATUS_GET(rxdesc_desc))
+			&& likely(EDMA_RXDESC_L4CSUM_STATUS_GET(rxdesc_desc))) {
+			return CHECKSUM_UNNECESSARY;
+		}
+	} else if (likely(EDMA_RX_PID_IS_IPV6(pid))) {
+		if (likely(EDMA_RXDESC_L4CSUM_STATUS_GET(rxdesc_desc))) {
+			return CHECKSUM_UNNECESSARY;
+		}
+	}
+
+	return skb->ip_summed;
+}
+
+/*
  * edma_rx_process_vp()
  *	Forward packet to VP module for processing.
  */
-static inline void edma_rx_process_vp(struct edma_rxdesc_desc *rxdesc_desc, struct sk_buff *skb)
+static inline void edma_rx_process_vp(struct edma_rxdesc_desc *rxdesc_desc, struct edma_rxdesc_ring *rxdesc_ring, struct sk_buff *skb)
 {
 	uint32_t dst_port;
 	nss_dp_vp_rx_cb_t edma_rx_vp_cb;
@@ -72,6 +97,8 @@ static inline void edma_rx_process_vp(struct edma_rxdesc_desc *rxdesc_desc, stru
 
 	vprxi.l3offset = EDMA_RXDESC_L3_OFFSET_GET(rxdesc_desc);
 	vprxi.svp = EDMA_RXDESC_SRC_INFO_GET(rxdesc_desc) & EDMA_RXDESC_PORTNUM_BITS;
+	vprxi.napi = &rxdesc_ring->napi;
+	vprxi.ip_summed = edma_rx_checksum_verify(rxdesc_desc, skb);
 
 	/*
 	 * Pass the packet to VP to process
@@ -251,29 +278,6 @@ static inline int edma_rx_alloc_buffer_list(struct edma_rxfill_ring *rxfill_ring
 int edma_rx_alloc_buffer(struct edma_rxfill_ring *rxfill_ring, int alloc_count)
 {
 	return edma_rx_alloc_buffer_list(rxfill_ring, alloc_count);
-}
-
-/*
- * edma_rx_checksum_verify()
- *	Update hw checksum status into skb
- */
-static inline void edma_rx_checksum_verify(struct edma_rxdesc_desc *rxdesc_desc,
-							struct sk_buff* skb)
-{
-	uint8_t pid = EDMA_RXDESC_PID_GET(rxdesc_desc);
-
-	skb_checksum_none_assert(skb);
-
-	if (likely(EDMA_RX_PID_IS_IPV4(pid))) {
-		if (likely(EDMA_RXDESC_L3CSUM_STATUS_GET(rxdesc_desc))
-			&& likely(EDMA_RXDESC_L4CSUM_STATUS_GET(rxdesc_desc))) {
-			skb->ip_summed = CHECKSUM_UNNECESSARY;
-		}
-	} else if (likely(EDMA_RX_PID_IS_IPV6(pid))) {
-		if (likely(EDMA_RXDESC_L4CSUM_STATUS_GET(rxdesc_desc))) {
-			skb->ip_summed = CHECKSUM_UNNECESSARY;
-		}
-	}
 }
 
 /*
@@ -582,7 +586,7 @@ process_next_scatter:
 	 * Check Rx checksum offload status.
 	 */
 	if (likely(dev->features & NETIF_F_RXCSUM)) {
-		edma_rx_checksum_verify(rxdesc_desc, skb_head);
+		skb->ip_summed = edma_rx_checksum_verify(rxdesc_desc, skb_head);
 	}
 
 	/*
@@ -683,7 +687,7 @@ process_next_scatter:
 	 * Check if packet is meant for VP processing
 	 */
 	if (unlikely(EDMA_RXDESC_SRC_DST_INFO_GET(rxdesc_desc) & EDMA_RXDESC_SRC_DST_VP_MASK)) {
-		edma_rx_process_vp(rxdesc_ring->pdesc_head, skb_head);
+		edma_rx_process_vp(rxdesc_ring->pdesc_head, rxdesc_ring, skb_head);
 		rxdesc_ring->head = NULL;
 		rxdesc_ring->last = NULL;
 		rxdesc_ring->pdesc_head = NULL;
@@ -781,7 +785,7 @@ send_to_stack:
 	 * Check Rx checksum offload status.
 	 */
 	if (likely(skb->dev->features & NETIF_F_RXCSUM)) {
-		edma_rx_checksum_verify(rxdesc_desc, skb);
+		skb->ip_summed = edma_rx_checksum_verify(rxdesc_desc, skb);
 	}
 
 	/*
@@ -825,7 +829,7 @@ send_to_stack:
 	 * Check if packet is meant for VP processing
 	 */
 	if (EDMA_RXDESC_SRC_DST_INFO_GET(rxdesc_desc) & EDMA_RXDESC_SRC_DST_VP_MASK) {
-		edma_rx_process_vp(rxdesc_desc, skb);
+		edma_rx_process_vp(rxdesc_desc, rxdesc_ring, skb);
 		return false;
 	}
 
