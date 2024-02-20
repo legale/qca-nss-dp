@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -33,9 +33,11 @@ struct nss_dp_vp_tx_info {
  *	VP info struct struct
  */
 struct nss_dp_vp_rx_info {
-	uint8_t dvp;		/* Destination VP number */
-	uint8_t svp;		/* Source VP number */
-	uint16_t l3offset;	/* L3 offset of packet */
+	uint8_t dvp;			/* Destination VP number */
+	uint8_t svp;			/* Source VP number */
+	uint16_t l3offset;		/* L3 offset of packet */
+	uint8_t ip_summed;		/* IP checksum */
+	struct napi_struct *napi;	/* RX NAPI */
 };
 
 /*
