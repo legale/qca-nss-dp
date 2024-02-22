@@ -947,6 +947,62 @@ void edma_cfg_rx_rings_enable(struct edma_gbl_ctx *egc)
 }
 
 /*
+ * edma_cfg_rx_ring_en_mapped_queues()
+ *	Enable / Disable the queues associated to the RX rings.
+ */
+bool edma_cfg_rx_ring_en_mapped_queues(struct edma_gbl_ctx *egc, uint16_t ring_id, bool enable)
+{
+	uint16_t ring_idx, queue_id, i;
+	sw_error_t ret;
+	a_bool_t en = enable;
+
+	ring_idx = ring_id - egc->rxdesc_ring_start;
+	for (i = 0; i < EDMA_MAX_PRI_PER_CORE; i++) {
+		queue_id = egc->rx_ring_queue_map[i][ring_idx];
+		ret = fal_qm_enqueue_ctrl_set(0, queue_id, en);
+		if (ret != SW_OK) {
+			edma_err("%px: Failed queue operation en %d", egc, enable);
+			return false;
+		}
+
+		ret = fal_scheduler_dequeue_ctrl_set(0, queue_id, en);
+		if (ret != SW_OK) {
+			edma_err("%px: Failed dequeue operation en %d", egc, enable);
+			return false;
+		}
+	}
+
+	return true;
+}
+
+/*
+ * edma_cfg_rx_ring_reset()
+ *	API to reset the individual RX ring
+ *	NOTE: Caller is expected to ensure that the corresponding
+ *	PPE queue is stopped and the ring is disabled.
+ */
+void edma_cfg_rx_ring_reset(struct edma_rxdesc_ring *ring)
+{
+	uint32_t data = 0;
+
+	/*
+	 * Reset the ring - wait untill the reset operation is done.
+	 */
+	data = edma_reg_read(EDMA_REG_RXDESC_RESET(ring->ring_id));
+	data |= EDMA_RXDESC_RX_RESET;
+	edma_reg_write(EDMA_REG_RXDESC_RESET(ring->ring_id), data);
+
+	do {
+		data = edma_reg_read(EDMA_REG_RXDESC_RESET(ring->ring_id));
+	} while (data);
+
+	/*
+	 * Reset the software consumer index.
+	 */
+	ring->cons_idx = 0;
+}
+
+/*
  * edma_cfg_rx_rings_disable()
  *	API to disable Rx and Rxfill rings
  */
