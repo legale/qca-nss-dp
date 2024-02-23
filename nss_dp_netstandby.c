@@ -172,6 +172,34 @@ int nss_dp_netstandby_enter_standby(void *app_data, struct netstandby_entry_info
 }
 
 /*
+ * nss_dp_get_eth_info
+ * 	Retrieve the info related to ethernet ports
+ */
+bool nss_dp_get_eth_info(struct nss_dp_eth_netdev_info ethinfo[], uint8_t array_size)
+{
+	struct nss_dp_global_ctx *dp_global = &dp_global_ctx;
+	struct nss_dp_dev *dp_priv;
+	uint8_t i  = 0;
+
+	if (array_size != NSS_DP_MAX_INTERFACES - 1)
+		return false;
+
+	for (i = 0; i < array_size; i++) {
+		dp_priv = dp_global->nss_dp[i];
+
+		if (!dp_priv) {
+			pr_warn("%p Error in retrieving netdev for ethernet port %d\n", dp_global, i);
+			return false;
+		}
+
+		ethinfo[i].netdev = dp_priv->netdev;
+	}
+
+	return true;
+}
+EXPORT_SYMBOL(nss_dp_get_eth_info);
+
+/*
  * nss_dp_get_and_register_cb()
  *	Get and register cb
  */
