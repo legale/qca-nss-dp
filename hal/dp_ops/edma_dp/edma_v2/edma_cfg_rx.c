@@ -623,6 +623,7 @@ static int32_t edma_cfg_rx_mapped_queue_ac_fc_configure(uint16_t threshold,
  */
 static void edma_cfg_rx_desc_ring_configure(struct edma_rxdesc_ring *rxdesc_ring)
 {
+	struct edma_gbl_ctx *egc = &edma_gbl_ctx;
 	uint32_t data;
 
 	edma_reg_write(EDMA_REG_RXDESC_BA(rxdesc_ring->ring_id),
@@ -663,7 +664,7 @@ static void edma_cfg_rx_desc_ring_configure(struct edma_rxdesc_ring *rxdesc_ring
 	/*
 	 * Configure the Mitigation timer
 	 */
-	data = MICROSEC_TO_TIMER_UNIT(nss_dp_rx_mitigation_timer);
+	data = MICROSEC_TO_TIMER_UNIT(nss_dp_rx_mitigation_timer, egc->edma_timer_rate);
 	data = ((data & EDMA_RX_MOD_TIMER_INIT_MASK)
 			<< EDMA_RX_MOD_TIMER_INIT_SHIFT);
 	edma_info("EDMA Rx mitigation timer value: %d\n", data);

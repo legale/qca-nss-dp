@@ -244,6 +244,7 @@ static void edma_cfg_tx_desc_ring_configure(struct edma_txdesc_ring *txdesc_ring
  */
 static void edma_cfg_tx_cmpl_ring_configure(struct edma_txcmpl_ring *txcmpl_ring)
 {
+	struct edma_gbl_ctx *egc = &edma_gbl_ctx;
 	uint32_t data;
 
 	/*
@@ -288,7 +289,7 @@ static void edma_cfg_tx_cmpl_ring_configure(struct edma_txcmpl_ring *txcmpl_ring
 	/*
 	 * Configure the Mitigation timer
 	 */
-	data = MICROSEC_TO_TIMER_UNIT(nss_dp_tx_mitigation_timer);
+	data = MICROSEC_TO_TIMER_UNIT(nss_dp_tx_mitigation_timer, egc->edma_timer_rate);
 	data = ((data & EDMA_TX_MOD_TIMER_INIT_MASK)
 			<< EDMA_TX_MOD_TIMER_INIT_SHIFT);
 	edma_info("EDMA Tx mitigation timer value: %d\n", data);
