@@ -69,7 +69,6 @@
 #endif
 
 #define EDMA_IRQ_NAME_SIZE		32
-#define EDMA_SC_BYPASS			1
 #define EDMA_NETDEV_FEATURES		NETIF_F_FRAGLIST \
 					| NETIF_F_SG \
 					| NETIF_F_RXCSUM \

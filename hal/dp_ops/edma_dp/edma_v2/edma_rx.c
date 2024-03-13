@@ -477,6 +477,7 @@ static inline bool edma_rx_handle_sc_cc_packets(struct edma_gbl_ctx *egc,
 			acl_info.cpu_code = cpu_code;
 			acl_info_valid = true;
 			cc_info.acl_hw_index = acl_info.acl_hw_index;
+			cc_info.acl_index_valid = true;
 		}
 
 		cc_info.cpu_code = cpu_code;

@@ -40,6 +40,12 @@ ifeq ($(SoC),$(filter $(SoC),ipq53xx))
 ccflags-y += -DNSS_DP_MHT_SW_PORT_MAP
 endif
 
+# Adding flag to enable physical port mirror support
+# in PPE - To be enabled when mirror support is needed.
+#ifeq ($(SoC),$(filter $(SoC),ipq95xx ipq53xx))
+#ccflags-y += -DNSS_DP_PORT_MIRROR_EN
+#endif
+
 ifeq ($(SoC),$(filter $(SoC),ipq50xx))
 qca-nss-dp-objs += hal/dp_ops/syn_gmac_dp/syn_dp_cfg_rx.o \
 		   hal/dp_ops/syn_gmac_dp/syn_dp_cfg_tx.o \
