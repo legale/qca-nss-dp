@@ -392,6 +392,34 @@ void edma_cfg_tx_rings_enable(struct edma_gbl_ctx *egc)
 }
 
 /*
+ * edma_cfg_tx_ring_reset()
+ *	API to reset the individual TX ring
+ *	NOTE: Caller is expected to ensure that no packets
+ *	will be coming on the ring and the producer and consumer
+ *	indexes are the same. (Currently used by PPE-DS only)
+ */
+void edma_cfg_tx_ring_reset(struct edma_txdesc_ring *ring)
+{
+	uint32_t data = 0;
+
+	/*
+	 * Reset the ring - wait untill the reset operation is done.
+	 */
+	data = edma_reg_read(EDMA_REG_TXDESC_CTRL(ring->id));
+	data |= EDMA_TXDESC_TX_RESET;
+	edma_reg_write(EDMA_REG_TXDESC_CTRL(ring->id), data);
+	do {
+		data = edma_reg_read(EDMA_REG_TXDESC_CTRL(ring->id));
+		data &= EDMA_TXDESC_TX_RESET;
+	} while (data);
+
+	/*
+	 * Reset the software producer index.
+	 */
+	ring->prod_idx = 0;
+}
+
+/*
  * edma_cfg_tx_rings_disable()
  *	API to disable TX rings
  */
