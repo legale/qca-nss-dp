@@ -22,6 +22,7 @@
 #include "nss_dp_dev.h"
 #include "edma_cfg_rx.h"
 #include "edma_cfg_tx.h"
+#include <ppe_drv.h>
 
 static char edma_ppeds_txcmpl_irq_name[EDMA_PPEDS_MAX_NODES][EDMA_IRQ_NAME_SIZE];
 static char edma_ppeds_rxdesc_irq_name[EDMA_PPEDS_MAX_NODES][EDMA_IRQ_NAME_SIZE];
@@ -1504,12 +1505,22 @@ void edma_ppeds_deinit(struct edma_ppeds_drv *drv)
 }
 
 /*
+ * edma_ppeds_get_queue_start_for_node()
+ *	PPEDS get queue_start for a particular node id.
+ */
+static int edma_ppeds_get_queue_start_for_node(struct edma_ppeds_drv *drv, int i)
+{
+	return ((uint8_t) drv->ppeds_node_cfg[i].node_map[EDMA_PPEDS_ENTRY_QID_START_IDX]);
+}
+
+/*
  * edma_ppeds_init()
  *	PPEDS init
  */
 int edma_ppeds_init(struct edma_ppeds_drv *drv)
 {
 	uint32_t i;
+	uint8_t queue_start;
 
 	rwlock_init(&drv->lock);
 
@@ -1521,6 +1532,10 @@ int edma_ppeds_init(struct edma_ppeds_drv *drv)
 				drv->ppeds_node_cfg[i].node_map[j] =
 					 edma_gbl_ctx.ppeds_node_map[i][j];
 			}
+
+			queue_start = edma_ppeds_get_queue_start_for_node(drv, i);
+			ppe_drv_ds_map_node_to_queue(i, queue_start);
+
 			drv->ppeds_node_cfg[i].node_state = EDMA_PPEDS_NODE_STATE_AVAIL;
 			continue;
 		}
