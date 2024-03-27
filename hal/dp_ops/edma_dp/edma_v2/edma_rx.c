@@ -28,6 +28,58 @@
 #include "nss_dp_dev.h"
 
 extern nss_dp_vp_rx_cb_t nss_dp_vp_rx_reg_cb;
+extern nss_dp_vp_list_rx_cb_t nss_dp_vp_list_rx_reg_cb;
+extern struct nss_dp_vp_skb_list gvp_skb_list[];
+
+/*
+ * edma_rx_process_capwap_vp()
+ *	Forward capwap packet to VP module for processing.
+ */
+static inline void edma_rx_process_capwap_vp(struct edma_rxdesc_ring *rxdesc_ring, struct edma_rxdesc_desc *rxdesc_desc, struct sk_buff *skb)
+{
+	uint32_t dst_port;
+	struct nss_dp_vp_skb_list *vsl;
+	uint8_t dvp, vpi;
+
+	dst_port = EDMA_RXDESC_DST_INFO_GET(rxdesc_desc);
+	if (unlikely((dst_port & ~EDMA_RXDESC_DST_PORT_ID_MASK) != EDMA_RXDESC_DST_PORT)) {
+
+		struct edma_pcpu_stats *pcpu_stats;
+		struct edma_rx_stats *rx_stats;
+		struct nss_dp_dev *vp_dev;
+		edma_warn(" Non-vp packet received on capwap ring skb:%px\n", skb);
+		vp_dev = netdev_priv(skb->dev);
+		dev_kfree_skb_any(skb);
+		pcpu_stats = &vp_dev->dp_info.pcpu_stats;
+		rx_stats = this_cpu_ptr(pcpu_stats->rx_stats);
+		u64_stats_update_begin(&rx_stats->syncp);
+		rx_stats->rx_vp_uninitialized++;
+		u64_stats_update_end(&rx_stats->syncp);
+		return;
+	}
+
+	dvp = EDMA_RXDESC_DST_PORT_ID_GET(rxdesc_desc);
+	skb->ip_summed = CHECKSUM_COMPLETE;
+
+	vpi = dvp - PPE_DRV_VIRTUAL_START;
+	vsl = &gvp_skb_list[vpi];
+
+	/*
+	 * First packet seen for this VP in this iteration.
+	 * Add the list to rxdesc_ring->vp_head
+	 */
+	if (unlikely(!vsl->len)) {
+		__skb_queue_head_init(&vsl->skb_list);
+		vsl->next = rxdesc_ring->vp_head;
+		rxdesc_ring->vp_head = vsl;
+		vsl->dvp = dvp;
+	}
+
+	vsl->len += skb->len;
+	__skb_queue_tail(&vsl->skb_list, skb);
+
+	return;
+}
 
 /*
  * edma_rx_checksum_verify()
@@ -711,6 +763,90 @@ process_next_scatter:
 }
 
 /*
+ * edma_rx_handle_capwap_inear_packets()
+ *	Handle linear packets
+ */
+void edma_rx_handle_capwap_linear_packets(struct edma_gbl_ctx *egc,
+		struct edma_rxdesc_ring *rxdesc_ring,
+		struct edma_rxdesc_desc *rxdesc_desc,
+		struct sk_buff *skb, struct net_device *dev)
+{
+	struct nss_dp_dev *dp_dev;
+	struct edma_pcpu_stats *pcpu_stats;
+	struct edma_rx_stats *rx_stats;
+	uint32_t pkt_length;
+	skb_frag_t *frag = NULL;
+	bool page_mode = rxdesc_ring->rxfill->page_mode;
+
+	/*
+	 * Get stats for the netdevice
+	 */
+	dp_dev = netdev_priv(dev);
+	pcpu_stats = &dp_dev->dp_info.pcpu_stats;
+	rx_stats = this_cpu_ptr(pcpu_stats->rx_stats);
+
+	/*
+	 * Get packet length
+	 */
+	pkt_length = EDMA_RXDESC_PACKET_LEN_GET(rxdesc_desc);
+
+	if (unlikely(page_mode)) {
+
+		/*
+		 * Handle linear packet in page mode
+		 */
+		frag = &skb_shinfo(skb)->frags[0];
+		dmac_inv_range((void *)skb_frag_page(frag),
+				(void *)(skb_frag_page(frag) + pkt_length));
+		skb_add_rx_frag(skb, 0, skb_frag_page(frag), 0, pkt_length, PAGE_SIZE);
+
+		/*
+		 * Pull ethernet header into SKB data area for header processing
+		 */
+		if (unlikely(!pskb_may_pull(skb, ETH_HLEN))) {
+			u64_stats_update_begin(&rx_stats->syncp);
+			rx_stats->rx_nr_frag_headroom_err++;
+			u64_stats_update_end(&rx_stats->syncp);
+			dev_kfree_skb_any(skb);
+			return;
+		}
+
+		goto send_to_vp;
+	}
+
+	/*
+	 * Invalidate the buffer received from the HW
+	 */
+	dmac_inv_range_no_dsb((void *)skb->data,
+			(void *)(skb->data + pkt_length));
+	skb_put(skb, pkt_length);
+
+send_to_vp:
+
+	/*
+	 * In some cases like PPE tunnel when mode 1 is enabled
+	 * the skb data will be pointing to outer header and if
+	 * packet decap is successful then data offset will point
+	 * to inner payload.
+	 */
+	__skb_pull(skb, EDMA_RXDESC_DATA_OFFSET_GET(rxdesc_desc));
+
+	/*
+	 * TODO: Do a batched update of the stats per netdevice.
+	 */
+	u64_stats_update_begin(&rx_stats->syncp);
+	rx_stats->rx_pkts++;
+	rx_stats->rx_bytes += pkt_length;
+	rx_stats->rx_nr_frag_pkts += (uint64_t)page_mode;
+	u64_stats_update_end(&rx_stats->syncp);
+
+	edma_debug("edma_gbl_ctx:%px, skb:%px pkt_length:%u\n",
+			egc, skb, skb->len);
+
+	edma_rx_process_capwap_vp(rxdesc_ring, rxdesc_desc, skb);
+}
+
+/*
  * edma_rx_handle_linear_packets()
  *	Handle linear packets
  *
@@ -929,6 +1065,256 @@ done:
 }
 
 /*
+ * edma_rx_get_src_capwap_dev()
+ *	Get source port and corresponding net device.
+ */
+struct net_device *edma_rx_get_src_capwap_dev(struct edma_gbl_ctx *egc,
+		struct edma_rx_desc_stats *rxdesc_stats,
+		struct edma_rxdesc_desc *rxdesc_desc,
+		struct sk_buff *skb)
+{
+	struct net_device *ndev;
+	uint32_t src_info = EDMA_RXDESC_SRC_INFO_GET(rxdesc_desc);
+	uint8_t src_port_num;
+
+	/*
+	 * Check src_info
+	 */
+	if (unlikely((src_info & EDMA_RXDESC_SRCINFO_TYPE_MASK) != EDMA_RXDESC_SRCINFO_TYPE_PORTID)) {
+		if (net_ratelimit()) {
+			edma_warn("Src_info_type:0x%x. Drop skb:%px\n",
+					(src_info &
+					 EDMA_RXDESC_SRCINFO_TYPE_MASK),
+					skb);
+		}
+		u64_stats_update_begin(&rxdesc_stats->syncp);
+		++rxdesc_stats->src_port_inval_type;
+		u64_stats_update_end(&rxdesc_stats->syncp);
+		return NULL;
+	}
+
+	src_port_num = src_info & EDMA_RXDESC_PORTNUM_BITS;
+	if (likely(((src_port_num >= PPE_DRV_VIRTUAL_START) && (src_port_num < PPE_DRV_PORTS_MAX)))) {
+		ndev = egc->netdev_arr[NSS_DP_MAX_PORTS - 1];
+		if (likely(ndev)) {
+			return ndev;
+		}
+
+		if (net_ratelimit()) {
+			edma_warn("Netdev Null src_info_type:0x%x. Drop skb:%px\n",
+								src_port_num, skb);
+		}
+		u64_stats_update_begin(&rxdesc_stats->syncp);
+		++rxdesc_stats->src_port_inval_netdev;
+		u64_stats_update_end(&rxdesc_stats->syncp);
+		return NULL;
+	}
+
+	if (unlikely(src_port_num <= NSS_DP_HAL_MAX_PORTS)) {
+		if (unlikely(src_port_num < NSS_DP_START_IFNUM)) {
+			if (net_ratelimit()) {
+				edma_warn("Port number error :%d. Drop skb:%px\n",
+								src_port_num, skb);
+			}
+			u64_stats_update_begin(&rxdesc_stats->syncp);
+			++rxdesc_stats->src_port_inval;
+			u64_stats_update_end(&rxdesc_stats->syncp);
+			return NULL;
+		}
+
+		/*
+		 * Get netdev for this port using the source port
+		 * number as index into the netdev array. We need to
+		 * subtract one since the indices start form '0' and
+		 * port numbers start from '1'.
+		 */
+		ndev = egc->netdev_arr[src_port_num - 1];
+	}
+
+	if (likely(ndev)) {
+		return ndev;
+	}
+
+	if (net_ratelimit()) {
+		edma_warn("Netdev Null src_info_type:0x%x. Drop skb:%px\n", src_port_num, skb);
+	}
+	u64_stats_update_begin(&rxdesc_stats->syncp);
+	++rxdesc_stats->src_port_inval_netdev;
+	u64_stats_update_end(&rxdesc_stats->syncp);
+	return NULL;
+}
+
+/*
+ * edma_rx_reap_capwap()
+ *	Reap Rx descriptors
+ */
+static uint32_t edma_rx_reap_capwap(struct edma_gbl_ctx *egc, int budget,
+				struct edma_rxdesc_ring *rxdesc_ring)
+{
+	struct edma_rxdesc_desc *rxdesc_desc, *pf_desc = NULL;
+	struct edma_rx_desc_stats *rxdesc_stats = &rxdesc_ring->rx_desc_stats;
+	uint32_t work_to_do, work_done = 0;
+	uint16_t prod_idx, cons_idx, end_idx;
+	uint16_t cons_idx_1, cons_idx_2;
+	struct list_head rx_list;
+	INIT_LIST_HEAD(&rx_list);
+
+	/*
+	 * Get Rx ring producer and consumer indices
+	 */
+	cons_idx = rxdesc_ring->cons_idx;
+
+	if (likely(rxdesc_ring->work_leftover > budget)) {
+		work_to_do = budget;
+	} else {
+		prod_idx =
+			edma_reg_read(EDMA_REG_RXDESC_PROD_IDX(rxdesc_ring->ring_id)) &
+			EDMA_RXDESC_PROD_IDX_MASK;
+		work_to_do = EDMA_DESC_AVAIL_COUNT(prod_idx,
+				cons_idx, EDMA_RX_RING_SIZE);
+		rxdesc_ring->work_leftover = work_to_do;
+		if (likely(work_to_do > budget)) {
+			work_to_do = budget;
+		}
+	}
+
+	rxdesc_ring->work_leftover -= work_to_do;
+
+	end_idx = (cons_idx + work_to_do) & EDMA_RX_RING_SIZE_MASK;
+
+	rxdesc_desc = EDMA_RXDESC_PRI_DESC(rxdesc_ring, cons_idx);
+
+	/*
+	 * Invalidate all the cached descriptors
+	 * that'll be processed.
+	 */
+	if (end_idx > cons_idx) {
+		dmac_inv_range_no_dsb((void *)rxdesc_desc,
+			(void *)(rxdesc_desc + work_to_do));
+	} else {
+		dmac_inv_range_no_dsb((void *)rxdesc_ring->pdesc,
+			(void *)(rxdesc_ring->pdesc + end_idx));
+		dmac_inv_range_no_dsb((void *)rxdesc_desc,
+			(void *)(rxdesc_ring->pdesc + EDMA_RX_RING_SIZE));
+	}
+
+	/*
+	 * TODO: Handle refill failures using retry
+	 */
+	edma_rx_alloc_buffer_list(rxdesc_ring->rxfill, work_to_do);
+
+	/*
+	 * Prefetch upto 3 Rx descriptors.
+	 */
+	prefetch(rxdesc_desc);
+	if (likely(work_to_do >= 3)) {
+		cons_idx_1 = (cons_idx + 1) & EDMA_RX_RING_SIZE_MASK;
+		pf_desc = EDMA_RXDESC_PRI_DESC(rxdesc_ring, cons_idx_1);
+		prefetch(pf_desc);
+
+		cons_idx_2 = (cons_idx_1 + 1) & EDMA_RX_RING_SIZE_MASK;
+		pf_desc = EDMA_RXDESC_PRI_DESC(rxdesc_ring, cons_idx_2);
+		prefetch(pf_desc);
+	}
+
+	while (likely(work_to_do--)) {
+		struct net_device *ndev;
+		struct sk_buff *skb;
+
+		/*
+		 * Get opaque from RXDESC
+		 */
+		skb = (struct sk_buff *)EDMA_RXDESC_OPAQUE_GET(rxdesc_desc);
+
+		if (likely(!(rxdesc_ring->head))) {
+			ndev = edma_rx_get_src_capwap_dev(egc, rxdesc_stats, rxdesc_desc, skb);
+			if(unlikely(!ndev)) {
+				dev_kfree_skb_any(skb);
+
+				/*
+				 * Update work done
+				 */
+				work_done++;
+
+				/*
+				 * Update consumer index
+				 */
+				cons_idx = (cons_idx + 1) & EDMA_RX_RING_SIZE_MASK;
+
+				/*
+				 * Get the next Rx descriptor.
+				 */
+				rxdesc_desc = EDMA_RXDESC_PRI_DESC(rxdesc_ring, cons_idx);
+				continue;
+			}
+
+			/*
+			 * Prefetch the third skb and the fourth descriptor
+			 */
+			if (likely(work_to_do >= 3)) {
+				struct sk_buff *pf_skb;
+				pf_skb = (struct sk_buff *)EDMA_RXDESC_OPAQUE_GET(pf_desc);
+				prefetch(pf_skb);
+				prefetch((uint8_t *)pf_skb + 64);
+				prefetch((uint8_t *)pf_skb + 128);
+				cons_idx_2 = (cons_idx_2 + 1) & EDMA_RX_RING_SIZE_MASK;
+
+				pf_desc = EDMA_RXDESC_PRI_DESC(rxdesc_ring, cons_idx_2);
+				prefetch(pf_desc);
+			}
+
+			/*
+			 * Update skb fields for head skb
+			 */
+			skb->dev = ndev;
+			skb->skb_iif = ndev->ifindex;
+
+			/*
+			 * Handle linear packets
+			 */
+			if (likely(!EDMA_RXDESC_MORE_BIT_GET(rxdesc_desc))) {
+				edma_rx_handle_capwap_linear_packets(egc, rxdesc_ring, rxdesc_desc, skb, ndev);
+				goto next_rx_desc;
+			}
+		}
+
+		/*
+		 * Handle scatter frame processing for first/middle/last segments
+		 */
+		edma_rx_handle_scatter_frames(egc, rxdesc_ring, rxdesc_desc, skb);
+
+next_rx_desc:
+		/*
+		 * Update work done
+		 */
+		work_done++;
+
+		/*
+		 * Update consumer index
+		 */
+		cons_idx = (cons_idx + 1) & EDMA_RX_RING_SIZE_MASK;
+
+		/*
+		 * Get the next Rx descriptor.
+		 */
+		rxdesc_desc = EDMA_RXDESC_PRI_DESC(rxdesc_ring, cons_idx);
+	}
+
+	dsb(st);
+
+	if (likely(rxdesc_ring->vp_head)) {
+		BUG_ON(!nss_dp_vp_list_rx_reg_cb);
+		nss_dp_vp_list_rx_reg_cb(rxdesc_ring->vp_head);
+		rxdesc_ring->vp_head = NULL;
+	}
+
+	edma_reg_write(EDMA_REG_RXDESC_CONS_IDX(rxdesc_ring->ring_id), cons_idx);
+	rxdesc_ring->cons_idx = cons_idx;
+
+	return work_done;
+}
+
+/*
  * edma_rx_reap()
  *	Reap Rx descriptors
  */
@@ -1124,6 +1510,45 @@ next_rx_desc:
 			netif_receive_skb(cur_skb);
 		}
 	}
+
+	return work_done;
+}
+
+/*
+ * edma_rx_napi_capwap_poll()
+ *	EDMA RX NAPI handler
+ */
+int edma_rx_napi_capwap_poll(struct napi_struct *napi, int budget)
+{
+	struct edma_rxdesc_ring *rxdesc_ring = (struct edma_rxdesc_ring *)napi;
+	struct edma_gbl_ctx *egc = &edma_gbl_ctx;
+	int32_t work_done = 0;
+	uint32_t status;
+
+	do {
+		work_done += edma_rx_reap_capwap(egc, budget - work_done, rxdesc_ring);
+		if (likely(work_done >= budget)) {
+			return work_done;
+		}
+
+		/*
+		 * Check if there are more packets to process
+		 */
+		status = EDMA_RXDESC_RING_INT_STATUS_MASK &
+			edma_reg_read(
+				EDMA_REG_RXDESC_INT_STAT(rxdesc_ring->ring_id));
+	} while (likely(status));
+
+	/*
+	 * No more packets to process. Finish NAPI processing.
+	 */
+	napi_complete(napi);
+
+	/*
+	 * Set RXDESC ring interrupt mask
+	 */
+	edma_reg_write(EDMA_REG_RXDESC_INT_MASK(rxdesc_ring->ring_id),
+						egc->rxdesc_intr_mask);
 
 	return work_done;
 }

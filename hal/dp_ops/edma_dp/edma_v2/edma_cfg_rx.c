@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -33,6 +33,7 @@ uint32_t edma_cfg_rx_queue_tail_drop_enable = EDMA_RX_QUEUE_TAIL_DROP_ENABLE;
 uint32_t edma_cfg_rx_rps_num_cores = NR_CPUS;
 uint32_t edma_cfg_rx_sec_desc_inval = 0;
 uint32_t edma_cfg_rx_rps_bitmap_cores = EDMA_RX_DEFAULT_BITMAP;
+extern uint32_t nss_dp_capwap_vp_rx_core;
 
 /*
  * Rx ring queue offset
@@ -1483,11 +1484,23 @@ void edma_cfg_rx_napi_add(struct edma_gbl_ctx *egc, struct net_device *netdev)
 	for (i = 0; i < egc->num_rxdesc_rings; i++) {
 		struct edma_rxdesc_ring *rxdesc_ring = &egc->rxdesc_rings[i];
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
-		netif_napi_add(netdev, &rxdesc_ring->napi,
-			 edma_rx_napi_poll, nss_dp_rx_napi_budget);
+		if (nss_dp_capwap_vp_rx_core == i) {
+			edma_info("Adding capwap napi for ring_id %d for core3\n", nss_dp_capwap_vp_rx_core);
+			netif_napi_add(netdev, &rxdesc_ring->napi,
+				edma_rx_napi_capwap_poll, nss_dp_rx_napi_budget);
+		} else {
+			netif_napi_add(netdev, &rxdesc_ring->napi,
+				edma_rx_napi_poll, nss_dp_rx_napi_budget);
+		}
 #else
-		netif_napi_add_weight(netdev, &rxdesc_ring->napi,
-			 edma_rx_napi_poll, nss_dp_rx_napi_budget);
+		if (nss_dp_capwap_vp_rx_core == i) {
+			edma_info("Adding capwap napi for ring_id %d for core3\n", nss_dp_capwap_vp_rx_core);
+			netif_napi_add_weight(netdev, &rxdesc_ring->napi,
+				edma_rx_napi_capwap_poll, nss_dp_rx_napi_budget);
+		} else {
+			netif_napi_add_weight(netdev, &rxdesc_ring->napi,
+				 edma_rx_napi_poll, nss_dp_rx_napi_budget);
+		}
 #endif
 		rxdesc_ring->napi_added = true;
 	}
