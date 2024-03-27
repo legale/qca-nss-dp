@@ -927,6 +927,26 @@ static sw_error_t edma_configure_ucast_prio_map_tbl(void)
 }
 
 /*
+ * edma_fetch_mitigation_timer_rate()
+ *	Fetch the EDMA mitigation timer rate
+ */
+static inline void edma_fetch_mitigation_timer_rate(struct edma_gbl_ctx *egc, const char *id)
+{
+	struct clk *clk = NULL;
+
+	clk = of_clk_get_by_name(egc->device_node, id);
+	if (IS_ERR(clk)) {
+		edma_err("Error in fetching %s clock reference. Setting the mitigation"
+				" timer rate to zero (means, mitigation will be disabled)\n", id);
+		egc->edma_timer_rate = 0;
+		return;
+	}
+
+	egc->edma_timer_rate = clk_get_rate(clk) / MHZ;
+	edma_debug("%s clock's rate: %u\n", id, egc->edma_timer_rate);
+}
+
+/*
  * edma_configure_rps_hash_map()
  *	Configure RPS hash map
  *
@@ -1044,6 +1064,7 @@ static int edma_hw_init(struct edma_gbl_ctx *egc)
 	edma_cfg_rx_point_offload_mapping(egc);
 #endif
 
+	edma_fetch_mitigation_timer_rate(egc, NSS_DP_EDMA_CLK);
 	edma_cfg_tx_rings(egc);
 	edma_cfg_rx_rings(egc);
 #if defined(NSS_DP_POINT_OFFLOAD)

@@ -141,18 +141,17 @@ enum edma_cpu_port_mcast_queues {
 #define EDMA_QID2RID_NUM_PER_REG	4
 
 /*
- * EDMA clock frequency: 352 MHZ
- * So, one clock cycle = (1/352) micro seconds
+ * One clock cycle = 1/(EDMA clock frequency in Mhz) micro seconds
  *
  * One timer unit is 128 clock cycles.
  *
  * So, therefore the microsecond to timer unit calculation is:
  * Timer unit	= time in microseconds / (one clock cycle in microsecond * cycles in 1 timer unit)
- * 		= ('x' microsecond * 352 / 128)
+ * 		= ('x' microsecond * EDMA clock frequency in MHz ('y') / 128)
  */
-#define EDMA_CLK_FREQ		352
 #define CYCLE_PER_TIMER_UNIT	128
-#define MICROSEC_TO_TIMER_UNIT(x)	(((x) * EDMA_CLK_FREQ) / CYCLE_PER_TIMER_UNIT)
+#define MICROSEC_TO_TIMER_UNIT(x, y)	((x) * (y) / CYCLE_PER_TIMER_UNIT)
+#define MHZ			1000000UL
 
 #define EDMA_DESC_AVAIL_COUNT(head, tail, max) (((head) - (tail)) + (max)) & ((max) - 1)
 
@@ -363,6 +362,8 @@ struct edma_gbl_ctx {
 #endif
 	struct work_struct work;
                         /* Creating work struct */
+	uint32_t edma_timer_rate;
+			/* EDMA clock's timer rate in Mhz */
 };
 
 extern struct edma_gbl_ctx edma_gbl_ctx;
