@@ -180,6 +180,11 @@ bool nss_dp_get_eth_info(struct nss_dp_eth_netdev_info ethinfo[], uint8_t array_
 	struct nss_dp_global_ctx *dp_global = &dp_global_ctx;
 	struct nss_dp_dev *dp_priv;
 	uint8_t i  = 0;
+#if defined(NSS_DP_IPQ53XX)
+	int port_id = 0;
+	sw_error_t ret;
+	a_bool_t status;
+#endif
 
 	if (array_size != NSS_DP_MAX_INTERFACES - 1)
 		return false;
@@ -193,6 +198,19 @@ bool nss_dp_get_eth_info(struct nss_dp_eth_netdev_info ethinfo[], uint8_t array_
 		}
 
 		ethinfo[i].netdev = dp_priv->netdev;
+#if defined(NSS_DP_IPQ53XX)
+		if (dp_global->nss_dp[i]->is_switch_connected) {
+			ethinfo[i].switch_connected = true;
+			for (port_id = 1; port_id <= MAX_MHT_PORTS ; port_id++) {
+				ret = fal_port_link_status_get(DP_STANDBY_SWITCH_MHT_DEV_ID, port_id,  &status);
+				if (ret != SW_OK) {
+					pr_warn("Link get status failed for port:%d ret:%d\n", port_id, ret);
+					return false;
+				}
+				ethinfo[i].mht_port_status[port_id - 1] = status;
+			}
+		}
+#endif
 	}
 
 	return true;
