@@ -69,7 +69,7 @@ static inline void edma_rx_process_capwap_vp(struct edma_rxdesc_ring *rxdesc_rin
 	 * Add the list to rxdesc_ring->vp_head
 	 */
 	if (unlikely(!vsl->len)) {
-		__skb_queue_head_init(&vsl->skb_list);
+		skb_queue_head_init(&vsl->skb_list);
 		vsl->next = rxdesc_ring->vp_head;
 		rxdesc_ring->vp_head = vsl;
 		vsl->dvp = dvp;
