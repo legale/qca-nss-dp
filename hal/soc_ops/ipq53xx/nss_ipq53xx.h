@@ -57,6 +57,13 @@
 #define NSS_DP_HAL_TX_NAPI_BUDGET	256
 
 /*
+ * Timestamp information for the latency measurement
+ */
+#define NSS_DP_GMAC_TS_ADDR_SEC(x)	((x) + 0xD08)
+#define NSS_DP_GMAC_TS_ADDR_NSEC(x)	((x) + 0xD0C)
+#define NSS_DP_EDMA_DEF_TSTAMP_PORT	2
+
+/*
  * EDMA clock's
  */
 #define NSS_DP_EDMA_CSR_CLK			"nss-csr-clk"
