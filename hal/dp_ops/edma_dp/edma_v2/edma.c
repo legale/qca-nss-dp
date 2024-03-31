@@ -1141,12 +1141,12 @@ static int edma_hw_init(struct edma_gbl_ctx *egc)
 		/*
 		 * Set the atheros header for MHT switch.
 		 */
-		tx_cfg.athtag_en = true;
+		tx_cfg.athtag_en = A_TRUE;
 		tx_cfg.athtag_type = MHT_ATHTAG_TYPE;
 		tx_cfg.version = FAL_ATHTAG_VER3;
 		tx_cfg.action = FAL_ATHTAG_ACTION_NORMAL;
-		tx_cfg.bypass_fwd_en = false;
-		tx_cfg.field_disable = false;
+		tx_cfg.bypass_fwd_en = A_FALSE;
+		tx_cfg.field_disable = A_FALSE;
 		fal_ret = fal_port_athtag_tx_set(EDMA_SWITCH_DEV_ID,
 						EDMA_MHT_SWITCH_PORT_ID,
 						&tx_cfg);
