@@ -129,7 +129,7 @@ int nss_dp_netstandby_enter_standby(void *app_data, struct netstandby_entry_info
 	}
 
 #if defined(NSS_DP_IPQ53XX)
-	if (entry_info->nss_info.port_id > NSS_DP_HAL_MAX_PORTS) {
+	if (entry_info->nss_info.port_id > NSS_DP_HAL_MHT_SWT_MAX_PORTS) {
 		pr_warn("%p Port_id out of range(%d)\n", ctx, entry_info->nss_info.port_id);
 		fal_erp_standby_exit(DP_STANDBY_SWITCH_DEV_ID);
 		return -EINVAL;
