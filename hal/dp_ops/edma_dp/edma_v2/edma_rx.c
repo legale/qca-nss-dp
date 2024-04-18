@@ -1328,7 +1328,7 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 	uint32_t work_to_do, work_done = 0;
 	uint16_t prod_idx, cons_idx, end_idx;
 	uint16_t cons_idx_1, cons_idx_2;
-	struct sk_buff *cur_skb = NULL;
+	struct sk_buff *cur_skb = NULL, *next_skb = NULL;
 	struct list_head rx_list;
 	INIT_LIST_HEAD(&rx_list);
 
@@ -1488,28 +1488,23 @@ next_rx_desc:
 	edma_reg_write(EDMA_REG_RXDESC_CONS_IDX(rxdesc_ring->ring_id), cons_idx);
 	rxdesc_ring->cons_idx = cons_idx;
 
-	cur_skb =  list_first_entry(&rx_list, struct sk_buff, list);
-	if (likely(cur_skb)) {
-		struct sk_buff *next_skb = NULL;
-
-		/*
-		 * Prefetch the packet data for the next skbuff, and the skbuff
-		 * structure for next and next-next skbuffs for optimal performance.
-		 */
-		list_for_each_entry_safe(cur_skb, next_skb, &rx_list, list) {
-			if (likely(next_skb)) {
-				prefetch(next_skb);
-				prefetch((uint8_t *)(next_skb) + 64);
-				prefetch((uint8_t *)(next_skb) + 128);
-				prefetch((uint8_t *)(next_skb) + 192);
-				prefetch(next_skb->data);
-				prefetch(skb_shinfo(next_skb));
-			}
-
-			skb_list_del_init(cur_skb);
-			cur_skb->protocol = eth_type_trans(cur_skb, cur_skb->dev);
-			netif_receive_skb(cur_skb);
+	/*
+	 * Prefetch the packet data for the next skbuff, and the skbuff
+	 * structure for next and next-next skbuffs for optimal performance.
+	 */
+	list_for_each_entry_safe(cur_skb, next_skb, &rx_list, list) {
+		if (likely(!list_entry_is_head(next_skb, &rx_list, list))) {
+			prefetch(next_skb);
+			prefetch((uint8_t *)(next_skb) + 64);
+			prefetch((uint8_t *)(next_skb) + 128);
+			prefetch((uint8_t *)(next_skb) + 192);
+			prefetch(next_skb->data);
+			prefetch(skb_shinfo(next_skb));
 		}
+
+		skb_list_del_init(cur_skb);
+		cur_skb->protocol = eth_type_trans(cur_skb, cur_skb->dev);
+		netif_receive_skb(cur_skb);
 	}
 
 	return work_done;
