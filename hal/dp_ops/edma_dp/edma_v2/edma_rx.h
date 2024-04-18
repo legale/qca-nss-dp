@@ -146,6 +146,20 @@
 #define EDMA_RXDESC_ACL_IDX_VALID_GET(desc)	(((le32_to_cpu((desc)->word1)) & 0x80000000) >> 31)
 #define EDMA_RXDESC_ACL_IDX_GET(desc)		(((le32_to_cpu((desc)->word1)) & 0x3FFF0000) >> 16)
 
+
+/*
+ * Fields to be obtained from secondary descriptor
+ */
+#define EDMA_RX_SDESC_TSTAMP_VALID_SHIFT	23
+#define EDMA_RX_SDESC_TSTAMP_VALID_MASK		EDMA_RXDESC_GENMASK(23, 23)
+#define EDMA_RX_SDESC_TSTAMP_VALID_GET(desc)	((le32_to_cpu(((desc)->word3)) & EDMA_RX_SDESC_TSTAMP_VALID_MASK) >> EDMA_RX_SDESC_TSTAMP_VALID_SHIFT)
+
+#define EDMA_RX_SDESC_TSTAMP_LO_GET(desc)	(le32_to_cpu(((desc)->word0)))
+
+#define EDMA_RX_SDESC_TSTAMP_HI_SHIFT		0
+#define EDMA_RX_SDESC_TSTAMP_HI_MASK		EDMA_RXDESC_GENMASK(7, 0)
+#define EDMA_RX_SDESC_TSTAMP_HI_GET(desc)	((le32_to_cpu(((desc)->word1)) & EDMA_RX_SDESC_TSTAMP_HI_MASK) >> EDMA_RX_SDESC_TSTAMP_HI_SHIFT)
+
 /*
  * Extracting Tree ID and WiFi-QoS from descriptor.
  */

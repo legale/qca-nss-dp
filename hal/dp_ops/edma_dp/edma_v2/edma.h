@@ -103,6 +103,10 @@
  */
 #define EDMA_QID2RID_TABLE_MEM(q)	(0xb9000 + (0x4 * (q)))
 
+#define EDMA_TIMESTAMP_SEC_MASK		EDMA_RX_SDESC_TSTAMP_HI_MASK
+#define EDMA_TIMESTAMP_NSEC_TO_USEC(x)	((x) / 1000)
+#define EDMA_TIMESTAMP_TO_USEC(x, y)	(((uint64_t)(x) * 1000000) + (EDMA_TIMESTAMP_NSEC_TO_USEC(y)))
+
 /*
  * edma_port_ucast_queues
  * 	EDMA unicast queue number
@@ -363,6 +367,12 @@ struct edma_gbl_ctx {
                         /* Creating work struct */
 	uint32_t edma_timer_rate;
 			/* EDMA clock's timer rate in Mhz */
+#ifdef CONFIG_SKB_TIMESTAMP
+	void __iomem *tstamp_sec;
+			/* EDMA timestamp value in second */
+	void __iomem *tstamp_nsec;
+			/* EDMA timestamp value in nano-second */
+#endif
 };
 
 extern struct edma_gbl_ctx edma_gbl_ctx;

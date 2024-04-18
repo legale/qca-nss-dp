@@ -1065,6 +1065,34 @@ done:
 	return NULL;
 }
 
+#ifdef CONFIG_SKB_TIMESTAMP
+/*
+ * edma_rx_get_tstamp()
+ *	Compute the timestamp received in the secondary descriptor
+ */
+static inline uint64_t edma_rx_get_tstamp(struct edma_rxdesc_sec_desc *rxsec_desc)
+{
+	uint32_t nsecs, secs;
+
+	nsecs = EDMA_RX_SDESC_TSTAMP_LO_GET(rxsec_desc);
+	secs = EDMA_RX_SDESC_TSTAMP_HI_GET(rxsec_desc);
+	return EDMA_TIMESTAMP_TO_USEC(secs, nsecs);
+}
+
+/*
+ * edma_rx_read_gmac_timer()()
+ *	API to read the GMAC timer register
+ */
+static inline uint64_t edma_rx_read_gmac_timer(struct edma_gbl_ctx *egc)
+{
+	uint32_t nsecs, secs;
+
+	nsecs = readl(egc->tstamp_nsec);
+	secs = readl(egc->tstamp_sec) & EDMA_TIMESTAMP_SEC_MASK;
+	return EDMA_TIMESTAMP_TO_USEC(secs, nsecs);
+}
+#endif
+
 /*
  * edma_rx_get_src_capwap_dev()
  *	Get source port and corresponding net device.
@@ -1414,6 +1442,23 @@ static uint32_t edma_rx_reap(struct edma_gbl_ctx *egc, int budget,
 		 */
 		skb = (struct sk_buff *)EDMA_RXDESC_OPAQUE_GET(rxdesc_desc);
 
+#ifdef CONFIG_SKB_TIMESTAMP
+	if (EDMA_RX_SDESC_TSTAMP_VALID_GET(rxdesc_sec)) {
+		uint64_t pkt_time, cur_time;
+
+		pkt_time = edma_rx_get_tstamp(rxdesc_sec);
+		cur_time = edma_rx_read_gmac_timer(egc);
+
+		if (likely(cur_time > pkt_time)) {
+			skb->delta_ts0 = cur_time - pkt_time;
+			skb->delta_ts1 = EDMA_TIMESTAMP_NSEC_TO_USEC(ktime_get_ns());
+			edma_debug("skb: %p, pkt_time: %llu, cur_time: %llu, delta_ts0: %llu, delta_ts1: %llu\n",
+					skb, pkt_time, cur_time,
+					skb->delta_ts0, skb->delta_ts1);
+		}
+	}
+#endif
+
 		/*
 		 * Handle linear packets or initial segments first
 		 */
@@ -1483,6 +1528,9 @@ next_rx_desc:
 		 * Get the next Rx descriptor.
 		 */
 		rxdesc_desc = EDMA_RXDESC_PRI_DESC(rxdesc_ring, cons_idx);
+#ifdef CONFIG_SKB_TIMESTAMP
+		rxdesc_sec = EDMA_RXDESC_SEC_DESC(rxdesc_ring, cons_idx);
+#endif
 	}
 
 	edma_reg_write(EDMA_REG_RXDESC_CONS_IDX(rxdesc_ring->ring_id), cons_idx);
