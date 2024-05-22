@@ -354,6 +354,7 @@ static void edma_rx_handle_wifi_qos_packets(struct edma_gbl_ctx *egc, struct edm
 	uint8_t service_class, wifi_qos;
 	struct edma_rxdesc_sec_desc *rxdesc_sec, *next_rxdesc_sec;
 	ppe_drv_tree_id_type_t tree_id_type;
+	uint32_t mlo_mark;
 
 	desc_index = ((uint8_t *)rxdesc_head - (uint8_t *)rxdesc_ring->pdesc) >> EDMA_RXDESC_SIZE_SHIFT;
 	rxdesc_sec = EDMA_RXDESC_SEC_DESC(rxdesc_ring, desc_index);
@@ -421,6 +422,21 @@ static void edma_rx_handle_wifi_qos_packets(struct edma_gbl_ctx *egc, struct edm
 		 */
 		skb->priority = wifi_qos;
 		edma_debug("%px : HLOS TID OVERRIDE priority configured = 0x%d\n", egc, skb->priority);
+		break;
+
+	case PPE_DRV_TREE_ID_TYPE_MLO_ASSIST:
+		/*
+		 * In case of MLO, fetch the MLO metadata from Tree ID.
+		 */
+		wifi_qos = EDMA_RXDESC_WIFI_QOS_GET(rxdesc_head);
+		mlo_mark = EDMA_RXDESC_MLO_MARK_GET(rxdesc_sec);
+
+		/*
+		 * Configure skb->mark with MLO metadata.
+		 */
+		skb->mark = EDMA_RX_MLO_METADATA_CONSTRUCT(mlo_mark, wifi_qos);
+
+		edma_debug("%px : mlo mark configured = 0x%x\n", egc, skb->mark);
 		break;
 
 	default:
