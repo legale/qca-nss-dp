@@ -1200,7 +1200,8 @@ static uint32_t edma_rx_reap_capwap(struct edma_gbl_ctx *egc, int budget,
 	struct edma_rx_desc_stats *rxdesc_stats = &rxdesc_ring->rx_desc_stats;
 	uint32_t work_to_do, work_done = 0;
 	uint16_t prod_idx, cons_idx, end_idx;
-	uint16_t cons_idx_1, cons_idx_2;
+	uint16_t cons_idx_1 = 0;
+	uint16_t cons_idx_2 = 0;
 	struct list_head rx_list;
 	INIT_LIST_HEAD(&rx_list);
 
