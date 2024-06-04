@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -100,6 +100,7 @@ static const struct proc_ops edma_procfs_ring_stats_fops = {
 void edma_procfs_exit(void)
 {
 	remove_proc_entry("enable_ring_stats_utilization", edma_procfs);
+	remove_proc_entry("edma_ring_util_stats", NULL);
 }
 
 /*
