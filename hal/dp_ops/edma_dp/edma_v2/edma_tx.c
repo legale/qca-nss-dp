@@ -348,7 +348,7 @@ static uint32_t edma_tx_skb_nr_frags(struct edma_txdesc_ring *txdesc_ring, struc
 
 /*
  * edma_tx_fill_vp_desc()
- *	Enable PPE processing with VP as source port
+ *	Enable PPE processing with VP as source/dest port
  */
 static inline void edma_tx_fill_vp_desc(struct nss_dp_dev *dp_dev, struct edma_pri_txdesc *txd,
 			struct sk_buff *skb, struct nss_dp_vp_tx_info *dptxi)
@@ -367,10 +367,15 @@ static inline void edma_tx_fill_vp_desc(struct nss_dp_dev *dp_dev, struct edma_p
 	EDMA_TXDESC_FAKE_MAC_HDR_SET(txd, dptxi->fake_mac);
 
 	/*
-	 * Set Source port information in the descriptor
+	 * Set Source/Dest port information in the descriptor
 	 */
-	EDMA_SRC_INFO_SET(txd, dptxi->svp);
-	EDMA_DST_INFO_SET(txd, 0);
+	if (dptxi->svp) {
+		EDMA_SRC_INFO_SET(txd, dptxi->svp);
+		EDMA_DST_INFO_SET(txd, 0);
+	} else {
+		EDMA_SRC_INFO_SET(txd, 0);
+		EDMA_DST_INFO_SET(txd, dptxi->dvp);
+	}
 }
 
 /*
