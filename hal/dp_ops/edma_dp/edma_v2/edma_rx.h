@@ -166,6 +166,18 @@
 #define EDMA_RX_SDESC_TSTAMP_HI_GET(desc)	((le32_to_cpu(((desc)->word1)) & EDMA_RX_SDESC_TSTAMP_HI_MASK) >> EDMA_RX_SDESC_TSTAMP_HI_SHIFT)
 
 /*
+ * Extracting Flow index from descriptor.
+ */
+#define EDMA_RX_SDESC_FLOW_IDX_VALID_SHIFT	21
+#define EDMA_RX_SDESC_FLOW_IDX_VALID_MASK	EDMA_RXDESC_GENMASK(21, 21)
+#define EDMA_RX_SDESC_FLOW_IDX_VALID_GET(desc)	((le32_to_cpu(((desc)->word3)) & EDMA_RX_SDESC_FLOW_IDX_VALID_MASK) >> EDMA_RX_SDESC_FLOW_IDX_VALID_SHIFT)
+
+#define EDMA_RX_SDESC_FLOW_IDX_INVALID		-1
+#define EDMA_RX_SDESC_FLOW_IDX_SHIFT		0
+#define EDMA_RX_SDESC_FLOW_IDX_MASK		EDMA_RXDESC_GENMASK(19, 0)
+#define EDMA_RX_SDESC_FLOW_IDX_GET(desc)	((le32_to_cpu(((desc)->word3)) & EDMA_RX_SDESC_FLOW_IDX_MASK) >> EDMA_RX_SDESC_FLOW_IDX_SHIFT)
+
+/*
  * Extracting Tree ID and WiFi-QoS from descriptor.
  */
 #define EDMA_RXDESC_WIFI_QOS_MASK		0xFF000000
@@ -183,13 +195,18 @@
 /*
  * Tree_id related Macros.
  *	---------------------------------------------------------------------------------
- *	|Tree_ID Type (4 bits) | 		Tree_ID Metadata(20 bits)		|
+ *	|QDISC_VALID (1 bit) | Tree_ID Type (3 bits) | 	Tree_ID Metadata(20 bits)	|
  *	---------------------------------------------------------------------------------
  */
+#define EDMA_RXDESC_TREE_ID_HOST_QDISC_VALID_MASK	0x00800000
 #define EDMA_RXDESC_TREE_ID_TYPE_SHIFT			20
-#define EDMA_RXDESC_TREE_ID_TYPE_MASK			0x00F00000
+#define EDMA_RXDESC_TREE_ID_TYPE_MASK			0x00700000
 #define EDMA_RXDESC_TREE_ID_TYPE_GET(desc)		((EDMA_RXDESC_TREE_ID_GET(desc) & EDMA_RXDESC_TREE_ID_TYPE_MASK) \
 								>> EDMA_RXDESC_TREE_ID_TYPE_SHIFT)
+#define EDMA_RXDESC_HOST_QDISC_VALID_GET(desc)		((EDMA_RXDESC_TREE_ID_GET(desc) & \
+								EDMA_RXDESC_TREE_ID_HOST_QDISC_VALID_MASK) \
+								>> EDMA_RXDESC_TREE_ID_TYPE_SHIFT)
+
 /*
  * SAWF related macros
  */
