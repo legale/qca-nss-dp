@@ -497,6 +497,7 @@ static inline bool edma_rx_handle_sc_cc_packets(struct edma_gbl_ctx *egc,
 		}
 
 		cc_info.cpu_code = cpu_code;
+		cc_info.fake_mac = EDMA_RXDESC_FAKE_MAC_GET(rxdesc_head);
 		if (cpu_code && ppe_drv_cc_process_skbuff(&cc_info, skb)) {
 			return true;
 		}
