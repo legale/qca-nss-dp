@@ -134,6 +134,26 @@ module_param_array(nss_dp_pri_map, byte, NULL, S_IRUGO);
 MODULE_PARM_DESC(nss_dp_pri_map, "Priority to multi-queue mapping");
 #endif
 
+#if defined(NSS_DP_EDMA_LOOPBACK_SUPPORT)
+/*
+ * Module parameter for Loopback ring
+ */
+#define EDMA_LOOPBACK_RING_SIZE 16384
+#define EDMA_LOOPBACK_BUFFER_SIZE 1536
+
+int edma_loopback_ring_size = EDMA_LOOPBACK_RING_SIZE;
+module_param(edma_loopback_ring_size, int, S_IRUGO);
+MODULE_PARM_DESC(edma_loopback_ring_size, "Loopback ring size");
+
+int edma_loopback_buffer_size = EDMA_LOOPBACK_BUFFER_SIZE;
+module_param(edma_loopback_buffer_size, int, S_IRUGO);
+MODULE_PARM_DESC(edma_loopback_buffer_size, "Loopback buffer size");
+
+int edma_loopback_disable = 0;
+module_param(edma_loopback_disable, int, S_IRUGO);
+MODULE_PARM_DESC(edma_loopback_disable, "Loopback disable");
+#endif
+
 /*
  * nss_dp_do_ioctl()
  */
@@ -1168,6 +1188,20 @@ int __init nss_dp_init(void)
 	 * Get the buffer size to allocate
 	 */
 	dp_global_ctx.rx_buf_size = NSS_DP_RX_BUFFER_SIZE;
+
+#if defined(NSS_DP_EDMA_LOOPBACK_SUPPORT)
+	if (edma_loopback_ring_size) {
+		dp_global_ctx.edma_loopback_ring_size = edma_loopback_ring_size;
+	}
+
+	if (edma_loopback_buffer_size) {
+		dp_global_ctx.edma_loopback_buffer_size = edma_loopback_buffer_size;
+	}
+
+	if (edma_loopback_disable) {
+		dp_global_ctx.edma_disable_loopback = edma_loopback_disable;
+	}
+#endif
 
 	/*
 	 * Configure tx requeue functionality based on module param
