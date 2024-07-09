@@ -1031,7 +1031,8 @@ bool edma_ppeds_get_ppe_queues(nss_dp_ppeds_handle_t *ppeds_handle, uint32_t *pp
 	struct edma_ppeds_node_cfg *node_cfg = &(drv->ppeds_node_cfg[ppeds_node->db_idx]);
 
 	read_lock_bh(&drv->lock);
-	if (node_cfg->node_state != EDMA_PPEDS_NODE_STATE_ALLOC) {
+	if ((node_cfg->node_state != EDMA_PPEDS_NODE_STATE_START_DONE) &&
+		(node_cfg->node_state != EDMA_PPEDS_NODE_STATE_ALLOC)) {
 		edma_err("%px: Invalid node state: %d, PPE-DS get queues failed\n", ppeds_node,
 				node_cfg->node_state);
 		read_unlock_bh(&drv->lock);
