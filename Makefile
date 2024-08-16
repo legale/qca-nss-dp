@@ -16,7 +16,9 @@ qca-nss-dp-objs += nss_dp_switchdev.o
 endif
 
 ifeq ($(SoC),$(filter $(SoC),ipq53xx))
+ifneq ($(CONFIG_QCA_NSS_DP_EAWTP),)
 qca-nss-dp-objs += nss_dp_eawtp.o
+endif
 endif
 
 NSS_DP_INCLUDE = -I$(obj)/include -I$(obj)/exports -I$(obj)/hal/include \
