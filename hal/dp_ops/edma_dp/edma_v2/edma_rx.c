@@ -110,11 +110,11 @@ static inline uint8_t edma_rx_checksum_verify(struct edma_rxdesc_desc *rxdesc_de
  * edma_rx_process_vp()
  *	Forward packet to VP module for processing.
  */
-static inline void edma_rx_process_vp(struct edma_rxdesc_desc *rxdesc_desc, struct edma_rxdesc_ring *rxdesc_ring, struct sk_buff *skb)
+static inline void edma_rx_process_vp(struct edma_rxdesc_desc *rxdesc_desc, struct edma_rxdesc_ring *rxdesc_ring,
+				       struct sk_buff *skb, struct nss_dp_vp_rx_info *vprxi_p)
 {
 	uint32_t dst_port;
 	nss_dp_vp_rx_cb_t edma_rx_vp_cb;
-	struct nss_dp_vp_rx_info vprxi;
 
 	rcu_read_lock();
 	edma_rx_vp_cb = rcu_dereference(nss_dp_vp_rx_reg_cb);
@@ -142,20 +142,20 @@ static inline void edma_rx_process_vp(struct edma_rxdesc_desc *rxdesc_desc, stru
 
 	dst_port = EDMA_RXDESC_DST_INFO_GET(rxdesc_desc);
 	if (likely((dst_port & ~EDMA_RXDESC_DST_PORT_ID_MASK) == EDMA_RXDESC_DST_PORT)) {
-		vprxi.dvp = EDMA_RXDESC_DST_PORT_ID_GET(rxdesc_desc);
+		vprxi_p->dvp = EDMA_RXDESC_DST_PORT_ID_GET(rxdesc_desc);
 	} else {
-		vprxi.dvp = 0;
+		vprxi_p->dvp = 0;
 	}
 
-	vprxi.l3offset = EDMA_RXDESC_L3_OFFSET_GET(rxdesc_desc);
-	vprxi.svp = EDMA_RXDESC_SRC_INFO_GET(rxdesc_desc) & EDMA_RXDESC_PORTNUM_BITS;
-	vprxi.napi = &rxdesc_ring->napi;
-	vprxi.ip_summed = edma_rx_checksum_verify(rxdesc_desc, skb);
+	vprxi_p->l3offset = EDMA_RXDESC_L3_OFFSET_GET(rxdesc_desc);
+	vprxi_p->svp = EDMA_RXDESC_SRC_INFO_GET(rxdesc_desc) & EDMA_RXDESC_PORTNUM_BITS;
+	vprxi_p->napi = &rxdesc_ring->napi;
+	vprxi_p->ip_summed = edma_rx_checksum_verify(rxdesc_desc, skb);
 
 	/*
 	 * Pass the packet to VP to process
 	 */
-	edma_rx_vp_cb(skb, &vprxi);
+	edma_rx_vp_cb(skb, vprxi_p);
 	rcu_read_unlock();
 }
 
@@ -353,7 +353,7 @@ static inline void edma_rx_sawf_sc_stats_update(uint64_t pkt_length, struct edma
  * edma_rx_handle_wifi_qos_packets()
  *	Handle packets with wifi qos enabled.
  */
-static void edma_rx_handle_wifi_qos_packets(struct edma_gbl_ctx *egc, struct edma_rxdesc_ring *rxdesc_ring, struct edma_rxdesc_desc *rxdesc_head, struct sk_buff *skb)
+static void edma_rx_handle_wifi_qos_packets(struct edma_gbl_ctx *egc, struct edma_rxdesc_ring *rxdesc_ring, struct edma_rxdesc_desc *rxdesc_head, struct sk_buff *skb, struct nss_dp_vp_rx_info *vprxi_p)
 {
 	uint16_t desc_index, peer_id, next_desc_index;
 	uint8_t service_class, wifi_qos;
@@ -374,6 +374,16 @@ static void edma_rx_handle_wifi_qos_packets(struct edma_gbl_ctx *egc, struct edm
 	prefetch(next_rxdesc_sec);
 
 	tree_id_type = EDMA_RXDESC_TREE_ID_TYPE_GET(rxdesc_sec);
+
+	/*
+	 * Fetch the flow index of the packet if Qdisc valid bit
+	 * is set in the tree-id type field.
+	 */
+	vprxi_p->flow_idx = EDMA_RX_SDESC_FLOW_IDX_INVALID;
+	if (EDMA_RXDESC_HOST_QDISC_VALID_GET(rxdesc_sec) &&
+			(EDMA_RX_SDESC_FLOW_IDX_VALID_GET(rxdesc_sec))) {
+		vprxi_p->flow_idx = EDMA_RX_SDESC_FLOW_IDX_GET(rxdesc_sec);
+	}
 
 	switch (tree_id_type) {
 	case PPE_DRV_TREE_ID_TYPE_NONE:
@@ -562,6 +572,7 @@ static void edma_rx_handle_scatter_frames(struct edma_gbl_ctx *egc,
 	struct edma_rx_stats *rx_stats;
 	struct sk_buff *skb_head;
 	struct net_device *dev;
+	struct nss_dp_vp_rx_info vprxi;
 	uint32_t pkt_length;
 	skb_frag_t *frag = NULL;
 	bool page_mode = rxdesc_ring->rxfill->page_mode;
@@ -754,15 +765,18 @@ process_next_scatter:
 		 * WiFi-QoS flag needs to be set for tree_id processing.
 		 */
 		if (unlikely(EDMA_RXDESC_WIFI_QOS_FLAG_VALID_GET(rxdesc_ring->pdesc_head))) {
-			edma_rx_handle_wifi_qos_packets(egc, rxdesc_ring, pdesc_head, skb_head);
+			edma_rx_handle_wifi_qos_packets(egc, rxdesc_ring, pdesc_head, skb_head, &vprxi);
+		} else {
+			vprxi.flow_idx = EDMA_RX_SDESC_FLOW_IDX_INVALID;
 		}
+
 	}
 
 	/*
 	 * Check if packet is meant for VP processing
 	 */
 	if (unlikely(EDMA_RXDESC_SRC_DST_INFO_GET(rxdesc_desc) & EDMA_RXDESC_SRC_DST_VP_MASK)) {
-		edma_rx_process_vp(rxdesc_ring->pdesc_head, rxdesc_ring, skb_head);
+		edma_rx_process_vp(rxdesc_ring->pdesc_head, rxdesc_ring, skb_head, &vprxi);
 		rxdesc_ring->head = NULL;
 		rxdesc_ring->last = NULL;
 		rxdesc_ring->pdesc_head = NULL;
@@ -884,6 +898,7 @@ static inline bool edma_rx_handle_linear_packets(struct edma_gbl_ctx *egc,
 	struct nss_dp_dev *dp_dev;
 	struct edma_pcpu_stats *pcpu_stats;
 	struct edma_rx_stats *rx_stats;
+	struct nss_dp_vp_rx_info vprxi;
 	uint32_t pkt_length;
 	skb_frag_t *frag = NULL;
 	bool page_mode = rxdesc_ring->rxfill->page_mode;
@@ -981,14 +996,16 @@ send_to_stack:
 	 * WiFi-QoS flag needs to be set for tree_id processing.
 	 */
 	if (unlikely(EDMA_RXDESC_WIFI_QOS_FLAG_VALID_GET(rxdesc_desc))) {
-		edma_rx_handle_wifi_qos_packets(egc, rxdesc_ring, rxdesc_desc, skb);
+		edma_rx_handle_wifi_qos_packets(egc, rxdesc_ring, rxdesc_desc, skb, &vprxi);
+	} else {
+		vprxi.flow_idx = EDMA_RX_SDESC_FLOW_IDX_INVALID;
 	}
 
 	/*
 	 * Check if packet is meant for VP processing
 	 */
 	if (EDMA_RXDESC_SRC_DST_INFO_GET(rxdesc_desc) & EDMA_RXDESC_SRC_DST_VP_MASK) {
-		edma_rx_process_vp(rxdesc_desc, rxdesc_ring, skb);
+		edma_rx_process_vp(rxdesc_desc, rxdesc_ring, skb, &vprxi);
 		return false;
 	}
 
