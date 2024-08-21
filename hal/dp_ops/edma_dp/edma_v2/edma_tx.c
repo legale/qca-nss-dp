@@ -132,16 +132,26 @@ uint32_t edma_tx_complete(uint32_t work_to_do, struct edma_txcmpl_ring *txcmpl_r
 
 			txcmpl_errors = EDMA_TXCOMP_RING_ERROR_GET(txcmpl->word3);
 			if (unlikely(txcmpl_errors)) {
-				/*
-				 * TODO : Demux and add a debug print per error type.
-				 */
-				if (net_ratelimit()) {
-					edma_err("Error 0x%0x observed in tx complete %d ring\n",
-							txcmpl_errors, txcmpl_ring->id);
-				}
+				long bit_pos;
 
+
+				/*
+				 * Demux the txcmpl error type.
+				 * There can multiple txcmpl errors in the same descriptors.
+				 * Hence we need to check for all the set
+				 * bits instead of just the first one.
+				 */
 				u64_stats_update_begin(&txcmpl_stats->syncp);
-				++txcmpl_stats->errors;
+				bit_pos = __builtin_ffs(txcmpl_errors);
+				while (bit_pos) {
+					++txcmpl_stats->errors[bit_pos - 1];
+					txcmpl_errors = txcmpl_errors & ~(0x1 << (bit_pos - 1));
+					bit_pos = __builtin_ffs(txcmpl_errors);
+					if (net_ratelimit()) {
+						edma_warn("Error 0x%0x observed in tx complete %d ring\n",
+								txcmpl_errors, txcmpl_ring->id);
+					}
+				}
 				u64_stats_update_end(&txcmpl_stats->syncp);
 			}
 
