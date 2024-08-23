@@ -1797,11 +1797,10 @@ static int edma_recovery_init(void)
 
 	for (i = 0; i < NSS_DP_HAL_MAX_PORTS; i++) {
 		dp_priv = dp_global_ctx.nss_dp[i];
-
-		edma_cfg_rx_napi_add(&edma_gbl_ctx, dp_priv->netdev);
 		edma_cfg_tx_napi_add(&edma_gbl_ctx, dp_priv->netdev, dp_priv->macid);
 
 		if (!edma_gbl_ctx.napi_added) {
+			edma_cfg_rx_napi_add(&edma_gbl_ctx, dp_priv->netdev);
 			edma_irq_init();
 		}
 
