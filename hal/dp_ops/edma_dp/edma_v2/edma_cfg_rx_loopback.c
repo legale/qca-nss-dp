@@ -101,11 +101,9 @@ static void edma_cfg_rx_desc_loopback_ring_cleanup(struct edma_gbl_ctx *egc,
 	/*
 	 * Free RXDESC ring descriptors
 	 */
-	kfree(rxdesc_ring->pdesc);
 	rxdesc_ring->pdesc = NULL;
 	rxdesc_ring->pdma = (dma_addr_t)0;
 
-	kfree(rxdesc_ring->sdesc);
 	rxdesc_ring->sdesc = NULL;
 	rxdesc_ring->sdma = (dma_addr_t)0;
 }
