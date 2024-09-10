@@ -25,6 +25,7 @@ struct nss_dp_vp_tx_info {
 	uint32_t flags;			/**< VP Tx flags. */
 	uint8_t sc;			/**< Service code. */
 	uint8_t svp;			/**< Source VP number. */
+	uint8_t dvp;			/**< Destination VP number. */
 	bool fake_mac;			/**< Needs Fake Mac. */
 };
 
