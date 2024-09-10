@@ -43,6 +43,36 @@ const char *edma_debugfs_ring_usage_rx_fill_dump[EDMA_RING_USAGE_MAX_FULL] = {
 };
 
 /*
+ * edma_txcmpl_err_string
+ *	EDMA Tx complete error string.
+ */
+const char *edma_txcmpl_err_string[EDMA_TX_CMPL_ERR_MAX] = {
+	"IP header length error",
+	"TSO error",
+	"IPv6 data length error",
+	"TCP header error",
+	"TCP header offset error",
+	"TCP data offset error",
+	"UDP header error",
+	"UDP header offset error",
+	"UDP data offset error",
+	"UDPLite header error",
+	"UDPLite header offset error",
+	"UDPLite csum cov error",
+	"IP version error",
+	"L4 offset < L3 offset error",
+	"L4 offset out of bounds error",
+	"L3 offset out of bounds error",
+	"Payload offset out of bounds error",
+	"Custom Checksum offset out of bounds error",
+	"Reserved",
+	"Reserved",
+	"Reserved",
+	"TSO MSS error",
+	"TSO TCP packet error"
+};
+
+/*
  * edma_debugfs_print_banner()
  *	API to print the banner for a node
  */
@@ -288,7 +318,7 @@ static int edma_debugfs_tx_rings_stats_show(struct seq_file *m, void __attribute
 		do {
 			start = edma_dp_stats_fetch_begin(&stats->syncp);
 			tx_cmpl_stats[i].invalid_buffer = stats->invalid_buffer;
-			tx_cmpl_stats[i].errors = stats->errors;
+			memcpy(tx_cmpl_stats[i].errors, stats->errors, sizeof(uint64_t) * EDMA_TX_CMPL_ERR_MAX);
 			tx_cmpl_stats[i].desc_with_more_bit = stats->desc_with_more_bit;
 			tx_cmpl_stats[i].no_pending_desc = stats->no_pending_desc;
 		} while (edma_dp_stats_fetch_retry(&stats->syncp, start));
@@ -301,8 +331,13 @@ static int edma_debugfs_tx_rings_stats_show(struct seq_file *m, void __attribute
 		seq_printf(m, "\t\tEDMA TX complete %d ring stats:\n", i + tx_cmpl_start_id);
 		seq_printf(m, "\t\t txcmpl[%d]:invalid_buffer = %llu\n",
 				i + tx_cmpl_start_id, tx_cmpl_stats[i].invalid_buffer);
-		seq_printf(m, "\t\t txcmpl[%d]:errors = %llu\n",
-				i + tx_cmpl_start_id, tx_cmpl_stats[i].errors);
+		for (j = 0; j < EDMA_TX_CMPL_ERR_MAX; j++) {
+			if (!strcmp(edma_txcmpl_err_string[j], "Reserved")) {
+				continue;
+			}
+			seq_printf(m, "\t\t txcmpl[%d]:%s = %llu\n",
+					i + tx_cmpl_start_id, edma_txcmpl_err_string[j], tx_cmpl_stats[i].errors[j]);
+		}
 		seq_printf(m, "\t\t txcmpl[%d]:desc_with_more_bit = %llu\n",
 				i + tx_cmpl_start_id, tx_cmpl_stats[i].desc_with_more_bit);
 		seq_printf(m, "\t\t txcmpl[%d]:no_pending_desc = %llu\n",

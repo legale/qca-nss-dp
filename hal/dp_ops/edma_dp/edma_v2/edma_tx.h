@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -176,6 +176,37 @@ enum edma_tx_gso {
 };
 
 /*
+ * edma_tx_cmpl_errors
+ *	EDMA Tx complete errors
+ */
+enum edma_tx_cmpl_errors {
+	EDMA_TX_CMPL_ERR_IP_HDR = 0,			/* IP header length Error */
+	EDMA_TX_CMPL_ERR_TSO = 1,			/* TSO Error */
+	EDMA_TX_CMPL_ERR_IP6_DATA_LEN = 2,		/* IP6 Data lenght Error */
+	EDMA_TX_CMPL_ERR_TCP_DATA_LEN = 3,		/* TCP header Error */
+	EDMA_TX_CMPL_ERR_TCP_HDR_TOO_LONG = 4,		/* Invalid TCP header offset */
+	EDMA_TX_CMPL_ERR_TCP_DATA_OFFSET_FIELD = 5,	/* Invalid TCP data offset */
+	EDMA_TX_CMPL_ERR_UDP_DATA_LEN = 6,		/* UDP header error */
+	EDMA_TX_CMPL_ERR_UDP_HDR_TOO_LONG = 7,		/* Invalid UDP header offset */
+	EDMA_TX_CMPL_ERR_UDP_LEN_FIELD = 8,		/* Invalid UDP data offset */
+	EDMA_TX_CMPL_ERR_UDPLITE_DATA_LEN = 9,		/* UDPLite header Error */
+	EDMA_TX_CMPL_ERR_UDPLITE_HDR_TOO_LONG = 10,	/* Invalid UDPLite header offset */
+	EDMA_TX_CMPL_ERR_UDPLITE_CSUM_COV = 11,		/* Invalid UDPLite csum cov */
+	EDMA_TX_CMPL_ERR_IP_VERSION = 12,		/* Invalid IP version */
+	EDMA_TX_CMPL_ERR_L4_OFFSET = 13,		/* L4 offset < L3 offset */
+	EDMA_TX_CMPL_ERR_L4_OFFSET_LARGE = 14,		/* L4 offset out of bounds */
+	EDMA_TX_CMPL_ERR_L3_OFFSET_LARGE = 15,		/* L3 offset out of bounds */
+	EDMA_TX_CMPL_ERR_PAYLOAD_OFFSET_LARGE = 16,	/* Payload offset out of bounds */
+	EDMA_TX_CMPL_ERR_CUST_CSUM_OFFSET_LARGE = 17,	/* Custom checksum offset out of bounds */
+	EDMA_TX_CMPL_ERR_RESERVE0 = 18,			/* Reserved */
+	EDMA_TX_CMPL_ERR_RESERVE1 = 19,			/* Reserved */
+	EDMA_TX_CMPL_ERR_RESERVE2 = 20,			/* Reserved */
+	EDMA_TX_CMPL_ERR_TSO_MSS = 21,			/* MSS error when TSO is enabled */
+	EDMA_TX_CMPL_ERR_TSO_TCP = 22,			/* TCP packet error when TSO is enabled */
+	EDMA_TX_CMPL_ERR_MAX
+};
+
+/*
  * edma_tx_stats
  *	EDMA TX per cpu stats
  */
@@ -200,7 +231,8 @@ struct edma_tx_stats {
  */
 struct edma_tx_cmpl_stats {
 	uint64_t invalid_buffer;		/* Invalid buffer address received */
-	uint64_t errors;			/* Other Tx complete descriptor errors indicated by the hardware */
+	uint64_t errors[EDMA_TX_CMPL_ERR_MAX];
+				/* Other Tx complete descriptor errors indicated by the hardware */
 	uint64_t desc_with_more_bit;		/* Packet's segment transmit count */
 	uint64_t no_pending_desc;		/* No descriptor is pending for processing */
 	struct edma_ring_util_stats ring_stats;    /* Tracking EDMA Tx cmpl ring utilization */
