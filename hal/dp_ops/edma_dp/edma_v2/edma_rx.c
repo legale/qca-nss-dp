@@ -228,6 +228,7 @@ bool edma_rx_alloc_buffer_loopback(struct edma_rxfill_ring *rxfill_ring, int all
 		/*
 		 * Store the order for free
 		 */
+		egc->buf_info[i].loopback_buf = (unsigned long)data[i];
 		egc->buf_info[i].loopback_order = order;
 	} else {
 		/*
@@ -246,6 +247,7 @@ bool edma_rx_alloc_buffer_loopback(struct edma_rxfill_ring *rxfill_ring, int all
 			/*
 			 * Store the order for free
 			 */
+			egc->buf_info[i].loopback_buf = (unsigned long)data[i];
 			egc->buf_info[i].loopback_order = EDMA_MAX_ORDER;
 		}
 
@@ -267,6 +269,7 @@ bool edma_rx_alloc_buffer_loopback(struct edma_rxfill_ring *rxfill_ring, int all
 				return false;
 			}
 
+			egc->buf_info[i].loopback_buf = (unsigned long)data[i];
 			egc->buf_info[i].loopback_order = get_order(rem * buf_len);
 			loop_count++;
 		}
@@ -285,7 +288,6 @@ bool edma_rx_alloc_buffer_loopback(struct edma_rxfill_ring *rxfill_ring, int all
 	for (i = 0; i < loop_count; i++) {
 		dma_addr_t buff_addr;
 		buff_addr = (dma_addr_t)virt_to_phys(data[i]);
-		egc->buf_info[i].loopback_buf = buff_addr;
 		for (j = 0; j < alloc_new_count; j++) {
 			/*
 			 * Last loop_count might not have to fill the entire alloc_new_count buffers; hence relying on

@@ -26,7 +26,9 @@ static void edma_cfg_tx_cmpl_loopback_ring_cleanup(struct edma_gbl_ctx *egc,
 	/*
 	 * Free TxCmpl ring descriptors
 	 */
-	kfree(txcmpl_ring->desc);
+	dma_free_coherent(&egc->pdev->dev,
+		(sizeof(struct edma_txcmpl_desc) * txcmpl_ring->count),
+		txcmpl_ring->desc, txcmpl_ring->dma);
 	txcmpl_ring->desc = NULL;
 	txcmpl_ring->dma = (dma_addr_t)0;
 }
