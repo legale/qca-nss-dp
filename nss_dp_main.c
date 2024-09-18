@@ -763,11 +763,11 @@ static int32_t nss_dp_of_get_pdata(struct device_node *np,
 #endif
 
 	dp_priv->ppe_offload_disabled = of_property_read_bool(np, "qcom,ppe-offload-disabled");
-	pr_info("%s: ppe offload disabled: %d for macid %d\n", np->name,
+	pr_debug("%s: ppe offload disabled: %d for macid %d\n", np->name,
 				dp_priv->ppe_offload_disabled, dp_priv->macid);
 
 	dp_priv->is_switch_connected = of_property_read_bool(np, "qcom,is_switch_connected");
-	pr_info("%s: Switch attached to macid %d status: %d\n", np->name, dp_priv->macid, dp_priv->is_switch_connected);
+	pr_debug("%s: Switch attached to macid %d status: %d\n", np->name, dp_priv->macid, dp_priv->is_switch_connected);
 
 	/*
 	 * Read switch dev when MHT switch port to txring mapping is enabled.
