@@ -26,6 +26,7 @@
 #include <linux/of_address.h>
 #include <linux/of_mdio.h>
 #include <linux/phy.h>
+
 #if defined(NSS_DP_PPE_SUPPORT)
 #include <fal/fal_vsi.h>
 #include <ref/ref_vsi.h>
@@ -38,6 +39,7 @@
 #include <init/ssdk_init.h>
 #endif
 #include "nss_dp_hal.h"
+
 #define JUMBO_MRU_3K 3072
 #define NSS_DP_CAPWAP_VP_RX_CORE_INVALID 0XFFFF
 
@@ -1075,8 +1077,10 @@ static int nss_dp_remove(struct platform_device *pdev)
 		dp_ops = dp_priv->data_plane_ops;
 		hal_ops = dp_priv->gmac_hal_ops;
 
-		if (dp_priv->phydev)
+		if (dp_priv->phydev) {
 			phy_disconnect(dp_priv->phydev);
+			dp_priv->phydev = NULL;
+		}
 
 #if defined(NSS_DP_PPE_SUPPORT)
 		/*
@@ -1084,9 +1088,21 @@ static int nss_dp_remove(struct platform_device *pdev)
 		 */
 		fal_port_vsi_set(0, dp_priv->macid, 0xFFFF);
 #endif
-		hal_ops->exit(dp_priv->gmac_hal_ctx);
 		dp_ops->deinit(dp_priv->dpc);
+
+#ifdef CONFIG_NET_SWITCHDEV
+		nss_dp_switchdev_cleanup(dp_priv->netdev);
+#endif
+
+		/*
+		 * Execution of unregister_netdev may access statistics of the
+		 * netdevice, which leads to the netdev op accessing netdev
+		 * priv's HAL data. So we ensure that netdev is unregistered
+		 * before performing hal_ops exit().
+		 */
 		unregister_netdev(dp_priv->netdev);
+		hal_ops->exit(dp_priv->gmac_hal_ctx);
+		dp_priv->gmac_hal_ctx = NULL;
 		free_netdev(dp_priv->netdev);
 		dp_global_ctx.nss_dp[i] = NULL;
 	}
@@ -1274,14 +1290,14 @@ int __init nss_dp_init(void)
 void __exit nss_dp_exit(void)
 {
 	/*
-	 * TODO Move this to soc_ops
+	 * Ensure netdev remove is done before HAL cleanup.
 	 */
+	platform_driver_unregister(&nss_dp_drv);
+
 	if (dp_global_ctx.common_init_done) {
 		nss_dp_hal_cleanup();
 		dp_global_ctx.common_init_done = false;
 	}
-
-	platform_driver_unregister(&nss_dp_drv);
 }
 
 module_init(nss_dp_init);

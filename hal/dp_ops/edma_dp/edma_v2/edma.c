@@ -276,6 +276,15 @@ void edma_cleanup(bool is_dp_override)
 	}
 #endif
 
+#ifdef NSS_DP_PPEDS_SUPPORT
+	edma_ppeds_deinit(&edma_gbl_ctx.ppeds_drv);
+#endif
+
+	/*
+	 * Release EDMA HW reset reference.
+	 */
+	reset_control_put(edma_gbl_ctx.hw_rst);
+
 	iounmap(edma_gbl_ctx.reg_base);
 	release_mem_region((edma_gbl_ctx.reg_resource)->start,
 			resource_size(edma_gbl_ctx.reg_resource));

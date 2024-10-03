@@ -2,7 +2,7 @@
  **************************************************************************
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved
+ * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -546,6 +546,24 @@ static int nss_dp_bridge_attr_set(struct net_device *dev,
 	return 0;
 }
 #endif /* NSS_DP_SW_BR_OPS */
+
+/*
+ * nss_dp_switchdev_cleanup()
+ *      Cleanup switch dev
+ */
+void nss_dp_switchdev_cleanup(struct net_device *dev)
+{
+        if (!switch_init_done) {
+                return;
+        }
+
+        unregister_switchdev_blocking_notifier(&nss_dp_switchdev_notifier);
+
+	if (nss_dp_sw_ev_nb) {
+		unregister_switchdev_notifier(nss_dp_sw_ev_nb);
+	}
+        switch_init_done = false;
+}
 
 /*
  * nss_dp_switchdev_setup()
