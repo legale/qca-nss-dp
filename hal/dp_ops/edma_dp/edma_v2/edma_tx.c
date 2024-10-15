@@ -147,9 +147,11 @@ uint32_t edma_tx_complete(uint32_t work_to_do, struct edma_txcmpl_ring *txcmpl_r
 					++txcmpl_stats->errors[bit_pos - 1];
 					txcmpl_errors = txcmpl_errors & ~(0x1 << (bit_pos - 1));
 					bit_pos = __builtin_ffs(txcmpl_errors);
-					if (net_ratelimit()) {
-						edma_warn("Error 0x%0x observed in tx complete %d ring\n",
-								txcmpl_errors, txcmpl_ring->id);
+					if (EDMA_DEBUG_LEVEL > 2) {
+						if (net_ratelimit()) {
+							edma_info("Error 0x%0x observed in tx complete %d ring\n",
+									txcmpl_errors, txcmpl_ring->id);
+						}
 					}
 				}
 				u64_stats_update_end(&txcmpl_stats->syncp);
