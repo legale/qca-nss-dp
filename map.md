@@ -101,6 +101,7 @@
 - `nss_dp_bridge_attr_set` (варианты) — при включённом `NSS_DP_SW_BR_OPS` делегирует настройку ageing time и learning в PPE driver; если не поддерживается, возвращает успех без действий.
 - `nss_dp_fdb_event` / `nss_dp_switchdev_event_nb` — обслуживают добавление/удаление статических FDB записей через PPE driver (EDMA v2) либо удаление записей (EDMA v1).
 - `nss_dp_switchdev_cleanup` / новая версия `nss_dp_switchdev_setup` — регистрируют/дерегистрируют blocking и non-blocking notifier-ы только один раз (`switch_init_done`).
+- `nss_dp_netdev_event` — netdevice-notifier, реагирует на `NETDEV_CHANGEUPPER` без `linking`, повторно переводит порт в `BR_STATE_FORWARDING` и пишет `fix-wan-stp: upper removed, forcing forwarding`, чтобы аппарат не оставался в disabled после удаления из моста. Регистрируется через `register_netdevice_notifier`/`unregister_netdevice_notifier` вместе с `switchdev`-notifier-ами (`nss_dp_switchdev.c`).
 - `nss_dp_is_bridge_port(net_device *)` — helper возвращает, есть ли у netdev мастера-bridge и пишет `netdev_dbg`, если порт уже не подключён к мосту.
 - `nss_dp_attr_set(...)` и `nss_dp_port_attr_set(...)` — перед `nss_dp_stp_state_set()` проверяют `nss_dp_is_bridge_port()`; когда порт уже отвязали от моста, они пишут `netdev_info` (`Skip STP state …`) и игнорируют дальнейшие STP-события, чтобы PPE/FAL не переводил порт в `FAL_STP_DISABLED`.
 

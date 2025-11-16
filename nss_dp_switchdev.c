@@ -20,6 +20,7 @@
 
 #include <linux/if_bridge.h>
 #include <linux/if_vlan.h>
+#include <linux/netdevice.h>
 #include <linux/version.h>
 #include <net/switchdev.h>
 #ifdef NSS_DP_SW_BR_OPS
@@ -34,6 +35,9 @@
 #include "ref/ref_vsi.h"
 #endif
 
+static bool switch_init_done;
+static bool netdev_nb_registered;
+
 #define NSS_DP_SWITCH_ID		0
 #define NSS_DP_SW_ETHTYPE_PID		0 /* PPE ethtype profile ID for slow protocols */
 #define ETH_P_NONE			0
@@ -41,7 +45,31 @@
 static int nss_dp_bridge_attr_set(struct net_device *dev,
 				const struct switchdev_attr *attr);
 
-static bool switch_init_done;
+static int nss_dp_netdev_event(struct notifier_block *unused,
+			       unsigned long event, void *ptr)
+{
+	struct netdev_notifier_changeupper_info *info = ptr;
+	struct net_device *dev = netdev_notifier_info_to_dev(ptr);
+	struct nss_dp_dev *dp_priv;
+
+	if (event != NETDEV_CHANGEUPPER)
+		return NOTIFY_DONE;
+
+	if (info->linking)
+		return NOTIFY_DONE;
+
+	if (!nss_dp_is_phy_dev(dev))
+		return NOTIFY_DONE;
+
+	dp_priv = netdev_priv(dev);
+	if (!dp_priv)
+		return NOTIFY_DONE;
+
+	netdev_info(dev, "fix-wan-stp: upper removed, forcing forwarding\n");
+	nss_dp_stp_state_set(dp_priv, BR_STATE_FORWARDING);
+
+	return NOTIFY_DONE;
+}
 
 /*
  * nss_dp_is_bridge_port()
@@ -400,6 +428,10 @@ static struct notifier_block nss_dp_switchdev_notifier = {
 	.notifier_call = nss_dp_switchdev_event,
 };
 
+static struct notifier_block nss_dp_netdev_notifier = {
+	.notifier_call = nss_dp_netdev_event,
+};
+
 #ifdef NSS_DP_SW_BR_OPS
 /*
  * nss_dp_bridge_attr_set()
@@ -671,6 +703,11 @@ void nss_dp_switchdev_cleanup(struct net_device *dev)
 	if (nss_dp_sw_ev_nb) {
 		unregister_switchdev_notifier(nss_dp_sw_ev_nb);
 	}
+
+	if (netdev_nb_registered) {
+		unregister_netdevice_notifier(&nss_dp_netdev_notifier);
+		netdev_nb_registered = false;
+	}
         switch_init_done = false;
 }
 
@@ -700,6 +737,11 @@ void nss_dp_switchdev_setup(struct net_device *dev)
 			netdev_dbg(dev, "%px:Failed to register non blocking switchdev \
 					notifier\n", dev);
 		}
+	}
+
+	if (!netdev_nb_registered) {
+		register_netdevice_notifier(&nss_dp_netdev_notifier);
+		netdev_nb_registered = true;
 	}
 
 	switch_init_done = true;
