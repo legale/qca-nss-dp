@@ -55,7 +55,17 @@ static int nss_dp_netdev_event(struct notifier_block *unused,
 	if (event != NETDEV_CHANGEUPPER)
 		return NOTIFY_DONE;
 
-	if (info->linking)
+	if (!dev) {
+		pr_warn("fix-wan-stp: netdev notifier without dev\n");
+		return NOTIFY_DONE;
+	}
+
+	netdev_info(dev, "fix-wan-stp netdev event %lu linking=%d upper=%s master=%s\n",
+		    event, info ? info->linking : -1,
+		    info && info->upper_dev ? info->upper_dev->name : "<none>",
+		    dev->master ? dev->master->name : "<none>");
+
+	if (info && info->linking)
 		return NOTIFY_DONE;
 
 	if (!nss_dp_is_phy_dev(dev))
@@ -65,7 +75,7 @@ static int nss_dp_netdev_event(struct notifier_block *unused,
 	if (!dp_priv)
 		return NOTIFY_DONE;
 
-	netdev_info(dev, "fix-wan-stp: upper removed, forcing forwarding\n");
+	netdev_info(dev, "fix-wan-stp: upper removed -> forcing forwarding\n");
 	nss_dp_stp_state_set(dp_priv, BR_STATE_FORWARDING);
 
 	return NOTIFY_DONE;
