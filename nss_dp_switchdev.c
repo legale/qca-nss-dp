@@ -779,6 +779,11 @@ void nss_dp_switchdev_setup(struct net_device *dev)
 		}
 	}
 
+	if (!netdev_nb_registered) {
+		register_netdevice_notifier(&nss_dp_netdev_notifier);
+		netdev_nb_registered = true;
+	}
+
 	switch_init_done = true;
 }
 #endif
