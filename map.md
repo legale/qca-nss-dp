@@ -30,7 +30,7 @@
 - `nss_dp_nsm_sawf_sc_stats_read(struct nss_dp_hal_nsm_sawf_sc_stats *, u8)` — обёртка вокруг HAL для считывания NSM SAWF статистик по service class.
 - `nss_dp_init(void)` — init-модуль: обнуляет глобальный контекст, применяет модульные параметры, вызывает `nss_dp_hal_init()` и регистрирует platform-драйвер.
 - `nss_dp_exit(void)` — exit-модуль: дерегистрирует платформенный драйвер и чистит HAL, если init выполнялся.
-- `nss_dp_init(void)` (лог) — помимо стандартной инициализации выводит `nss-dp: STP bridge guard enabled (marker: fix-wan-stp)`, чтобы гарантированно увидеть в `dmesg` именно собранную нами версию модуля (`nss_dp_main.c:1174-1271`).
+- `nss_dp_init(void)` (лог) — помимо стандартной инициализации выводит `nss-dp: STP bridge guard enabled (marker: fix-wan-stp build 2738045)`, чтобы вы точно узнали, что этот модуль собран из наших правок (`nss_dp_main.c:1174-1271`).
 - Кроме функций, файл определяет структуру `nss_dp_netdev_ops`, глобальные параметры (`page_mode`, `jumbo_mru`, budgets, mitigation timers и т.п.) и вспомогательные сущности (mdio data, контексты).
 
 ## nss_dp_attach.c
