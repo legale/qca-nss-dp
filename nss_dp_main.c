@@ -1261,6 +1261,7 @@ static int __init nss_dp_init(void)
 	pr_info("**********************************************************\n");
 	pr_info("* NSS Data Plane driver\n");
 	pr_info("**********************************************************\n");
+	pr_info("nss-dp: STP bridge guard enabled\n");
 
 	return ret;
 }

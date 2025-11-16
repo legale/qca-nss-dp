@@ -55,7 +55,12 @@ static bool nss_dp_is_bridge_port(struct net_device *dev)
 	br_dev = netdev_master_upper_dev_get_rcu(dev);
 	rcu_read_unlock();
 
-	return br_dev != NULL;
+	bool is_bridge = br_dev != NULL;
+
+	if (!is_bridge)
+		netdev_dbg(dev, "%s: device no longer enslaved to bridge\n", dev->name);
+
+	return is_bridge;
 }
 
 /*
@@ -251,8 +256,11 @@ static int nss_dp_attr_set(struct net_device *dev,
 		netdev_dbg(dev, "set brport_flags %lu\n", attr->u.brport_flags);
 		return 0;
 	case SWITCHDEV_ATTR_ID_PORT_STP_STATE:
-		if (!nss_dp_is_bridge_port(dev))
+		if (!nss_dp_is_bridge_port(dev)) {
+			netdev_info(dev, "Skip STP state %u: not a bridge port\n",
+				    stp_state);
 			return 0;
+		}
 
 		/*
 		 * The stp state is not changed to FAL_STP_DISABLED if
@@ -332,8 +340,11 @@ static int nss_dp_port_attr_set(struct net_device *dev,
 	case SWITCHDEV_ATTR_ID_BRIDGE_AGEING_TIME:
 		return nss_dp_bridge_attr_set(dev, attr);
 	case SWITCHDEV_ATTR_ID_PORT_STP_STATE:
-		if (!nss_dp_is_bridge_port(dev))
+		if (!nss_dp_is_bridge_port(dev)) {
+			netdev_info(dev, "Skip STP state %u: not a bridge port\n",
+				    attr->u.stp_state);
 			return 0;
+		}
 		return nss_dp_stp_state_set(dp_priv, attr->u.stp_state);
 	default:
 		return -EOPNOTSUPP;

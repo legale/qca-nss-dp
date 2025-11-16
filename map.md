@@ -30,6 +30,7 @@
 - `nss_dp_nsm_sawf_sc_stats_read(struct nss_dp_hal_nsm_sawf_sc_stats *, u8)` — обёртка вокруг HAL для считывания NSM SAWF статистик по service class.
 - `nss_dp_init(void)` — init-модуль: обнуляет глобальный контекст, применяет модульные параметры, вызывает `nss_dp_hal_init()` и регистрирует platform-драйвер.
 - `nss_dp_exit(void)` — exit-модуль: дерегистрирует платформенный драйвер и чистит HAL, если init выполнялся.
+- `nss_dp_init(void)` (лог) — помимо стандартной инициализации выводит `nss-dp: STP bridge guard enabled`, чтобы в `dmesg` было видно, что guard-логика собрана и действует (`nss_dp_main.c:1174-1271`).
 - Кроме функций, файл определяет структуру `nss_dp_netdev_ops`, глобальные параметры (`page_mode`, `jumbo_mru`, budgets, mitigation timers и т.п.) и вспомогательные сущности (mdio data, контексты).
 
 ## nss_dp_attach.c
@@ -100,6 +101,8 @@
 - `nss_dp_bridge_attr_set` (варианты) — при включённом `NSS_DP_SW_BR_OPS` делегирует настройку ageing time и learning в PPE driver; если не поддерживается, возвращает успех без действий.
 - `nss_dp_fdb_event` / `nss_dp_switchdev_event_nb` — обслуживают добавление/удаление статических FDB записей через PPE driver (EDMA v2) либо удаление записей (EDMA v1).
 - `nss_dp_switchdev_cleanup` / новая версия `nss_dp_switchdev_setup` — регистрируют/дерегистрируют blocking и non-blocking notifier-ы только один раз (`switch_init_done`).
+- `nss_dp_is_bridge_port(net_device *)` — helper возвращает, есть ли у netdev мастера-bridge и пишет `netdev_dbg`, если порт уже не подключён к мосту.
+- `nss_dp_attr_set(...)` и `nss_dp_port_attr_set(...)` — перед `nss_dp_stp_state_set()` проверяют `nss_dp_is_bridge_port()`; когда порт уже отвязали от моста, они пишут `netdev_info` (`Skip STP state …`) и игнорируют дальнейшие STP-события, чтобы PPE/FAL не переводил порт в `FAL_STP_DISABLED`.
 
 ## nss_dp_vp_main.c
 **Назначение:** поддержка виртуальных портов (VP), которые используют dataplane без связанного MAC/GMAC: создаёт фиктивный `net_device`, экспортирует API для регистрации Rx callbacks и отправки пакетов через VP Tx rings.
@@ -109,4 +112,3 @@
 - `nss_dp_vp_rx_register_cb(nss_dp_vp_rx_cb_t, nss_dp_vp_list_rx_cb_t)` / `nss_dp_vp_rx_unregister_cb()` — регистрируют/удаляют Rx callbacks (индивидуальные и списковые) с синхронизацией RCU.
 - `nss_dp_vp_init(void)` — выделяет и настраивает отдельный `net_device` (macid `NSS_DP_VP_MAC_ID`), цепляет dataplane ops через HAL, вызывает `init/open` dataplane без использования GMAC HAL и добавляет порт в глобальный массив.
 - `nss_dp_vp_deinit(net_device *)` — освобождает виртуальный netdev (dataplane остановкой занимается вызывающий код перед тем, как вызвать deinit).
-
