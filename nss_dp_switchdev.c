@@ -115,6 +115,21 @@ static bool nss_dp_is_bridge_port(struct net_device *dev)
 }
 
 /*
+ * nss_dp_is_bridge_port()
+ *	Returns true if port is currently enslaved to a bridge/master.
+ */
+static bool nss_dp_is_bridge_port(struct net_device *dev)
+{
+	struct net_device *br_dev;
+
+	rcu_read_lock();
+	br_dev = netdev_master_upper_dev_get_rcu(dev);
+	rcu_read_unlock();
+
+	return br_dev != NULL;
+}
+
+/*
  * nss_dp_set_slow_proto_filter()
  *	Enable/Disable filter to allow Ethernet slow-protocol
  */
