@@ -20,6 +20,7 @@
 
 #include <linux/if_bridge.h>
 #include <linux/if_vlan.h>
+#include <linux/netdevice.h>
 #include <linux/version.h>
 #include <net/switchdev.h>
 #ifdef NSS_DP_SW_BR_OPS
@@ -34,14 +35,84 @@
 #include "ref/ref_vsi.h"
 #endif
 
+static bool switch_init_done;
+
 #define NSS_DP_SWITCH_ID		0
 #define NSS_DP_SW_ETHTYPE_PID		0 /* PPE ethtype profile ID for slow protocols */
 #define ETH_P_NONE			0
 
 static int nss_dp_bridge_attr_set(struct net_device *dev,
 				const struct switchdev_attr *attr);
+/*
+ * nss_dp_netdev_event()
+ *	Netdevice event handler to fix STP state for NSS data plane ports.
+ */
+static int nss_dp_stp_state_set(struct nss_dp_dev *dp_priv, u8 state);
 
-static bool switch_init_done;
+static int nss_dp_netdev_event(struct notifier_block *unused,
+			       unsigned long event, void *ptr)
+{
+	struct netdev_notifier_changeupper_info *info = ptr;
+	struct net_device *dev = netdev_notifier_info_to_dev(ptr);
+	struct net_device *master = NULL;
+	struct nss_dp_dev *dp_priv;
+
+	if (event != NETDEV_CHANGEUPPER)
+		return NOTIFY_DONE;
+
+	if (!dev) {
+		pr_warn("netdev notifier without dev\n");
+		return NOTIFY_DONE;
+	}
+
+	rcu_read_lock();
+	master = netdev_master_upper_dev_get_rcu(dev);
+	if (master)
+		dev_hold(master);
+	rcu_read_unlock();
+
+	netdev_info(dev, "netdev event %lu linking=%d master=%s\n",
+		    event, info ? info->linking : -1,
+		    master ? master->name : "nomaster");
+
+	if (master)
+		dev_put(master);
+
+	if (info && info->linking)
+		return NOTIFY_DONE;
+
+	if (!nss_dp_is_phy_dev(dev))
+		return NOTIFY_DONE;
+
+	dp_priv = netdev_priv(dev);
+	if (!dp_priv)
+		return NOTIFY_DONE;
+
+	netdev_info(dev, "upper removed -> forcing forwarding\n");
+	nss_dp_stp_state_set(dp_priv, BR_STATE_FORWARDING);
+
+	return NOTIFY_DONE;
+}
+
+/*
+ * nss_dp_is_bridge_port()
+ *	Returns true if port is currently enslaved to a bridge/master.
+ */
+static bool nss_dp_is_bridge_port(struct net_device *dev)
+{
+	struct net_device *br_dev;
+
+	rcu_read_lock();
+	br_dev = netdev_master_upper_dev_get_rcu(dev);
+	rcu_read_unlock();
+
+	bool is_bridge = br_dev != NULL;
+
+	if (!is_bridge)
+		netdev_dbg(dev, "device=%s no longer enslaved to bridge\n", dev->name);
+
+	return is_bridge;
+}
 
 /*
  * nss_dp_set_slow_proto_filter()
@@ -135,6 +206,8 @@ static int nss_dp_stp_state_set(struct nss_dp_dev *dp_priv, u8 state)
 {
 	sw_error_t err;
 	fal_stp_state_t stp_state;
+
+	netdev_info(dp_priv->netdev, "setting STP state=%u\n", state);
 
 	switch (state) {
 	case BR_STATE_DISABLED:
@@ -236,6 +309,12 @@ static int nss_dp_attr_set(struct net_device *dev,
 		netdev_dbg(dev, "set brport_flags %lu\n", attr->u.brport_flags);
 		return 0;
 	case SWITCHDEV_ATTR_ID_PORT_STP_STATE:
+		if (!nss_dp_is_bridge_port(dev)) {
+			netdev_info(dev, "Skip STP state %u: not a bridge port\n",
+				    stp_state);
+			return 0;
+		}
+
 		/*
 		 * The stp state is not changed to FAL_STP_DISABLED if
 		 * the net_device (dev) has any vlan configured. Otherwise
@@ -314,6 +393,11 @@ static int nss_dp_port_attr_set(struct net_device *dev,
 	case SWITCHDEV_ATTR_ID_BRIDGE_AGEING_TIME:
 		return nss_dp_bridge_attr_set(dev, attr);
 	case SWITCHDEV_ATTR_ID_PORT_STP_STATE:
+		if (!nss_dp_is_bridge_port(dev)) {
+			netdev_info(dev, "Skip STP state %u: not a bridge port\n",
+				    attr->u.stp_state);
+			return 0;
+		}
 		return nss_dp_stp_state_set(dp_priv, attr->u.stp_state);
 	default:
 		return -EOPNOTSUPP;
@@ -367,6 +451,10 @@ static int nss_dp_switchdev_event(struct notifier_block *unused,
 
 static struct notifier_block nss_dp_switchdev_notifier = {
 	.notifier_call = nss_dp_switchdev_event,
+};
+
+struct notifier_block nss_dp_netdev_notifier = {
+	.notifier_call = nss_dp_netdev_event,
 };
 
 #ifdef NSS_DP_SW_BR_OPS
@@ -640,7 +728,7 @@ void nss_dp_switchdev_cleanup(struct net_device *dev)
 	if (nss_dp_sw_ev_nb) {
 		unregister_switchdev_notifier(nss_dp_sw_ev_nb);
 	}
-        switch_init_done = false;
+	switch_init_done = false;
 }
 
 /*
