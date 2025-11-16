@@ -44,6 +44,21 @@ static int nss_dp_bridge_attr_set(struct net_device *dev,
 static bool switch_init_done;
 
 /*
+ * nss_dp_is_bridge_port()
+ *	Returns true if port is currently enslaved to a bridge/master.
+ */
+static bool nss_dp_is_bridge_port(struct net_device *dev)
+{
+	struct net_device *br_dev;
+
+	rcu_read_lock();
+	br_dev = netdev_master_upper_dev_get_rcu(dev);
+	rcu_read_unlock();
+
+	return br_dev != NULL;
+}
+
+/*
  * nss_dp_set_slow_proto_filter()
  *	Enable/Disable filter to allow Ethernet slow-protocol
  */
@@ -236,6 +251,9 @@ static int nss_dp_attr_set(struct net_device *dev,
 		netdev_dbg(dev, "set brport_flags %lu\n", attr->u.brport_flags);
 		return 0;
 	case SWITCHDEV_ATTR_ID_PORT_STP_STATE:
+		if (!nss_dp_is_bridge_port(dev))
+			return 0;
+
 		/*
 		 * The stp state is not changed to FAL_STP_DISABLED if
 		 * the net_device (dev) has any vlan configured. Otherwise
@@ -314,6 +332,8 @@ static int nss_dp_port_attr_set(struct net_device *dev,
 	case SWITCHDEV_ATTR_ID_BRIDGE_AGEING_TIME:
 		return nss_dp_bridge_attr_set(dev, attr);
 	case SWITCHDEV_ATTR_ID_PORT_STP_STATE:
+		if (!nss_dp_is_bridge_port(dev))
+			return 0;
 		return nss_dp_stp_state_set(dp_priv, attr->u.stp_state);
 	default:
 		return -EOPNOTSUPP;
