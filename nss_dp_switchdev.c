@@ -126,7 +126,12 @@ static bool nss_dp_is_bridge_port(struct net_device *dev)
 	br_dev = netdev_master_upper_dev_get_rcu(dev);
 	rcu_read_unlock();
 
-	return br_dev != NULL;
+	bool is_bridge = br_dev != NULL;
+
+	if (!is_bridge)
+		netdev_dbg(dev, "%s: device no longer enslaved to bridge\n", dev->name);
+
+	return is_bridge;
 }
 
 /*
