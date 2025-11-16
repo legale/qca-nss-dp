@@ -95,6 +95,7 @@
 **Функции:**
 - `nss_dp_set_slow_proto_filter(nss_dp_dev *, bool)` — программирует PPE ctrlpkt профили, чтобы пропускать STP/LACP slow protocols на отключённых портовых состояниях, отслеживая bitmap активных портов.
 - `nss_dp_stp_state_set(nss_dp_dev *, u8)` — переводит STP состояние bridge-порта в эквивалент FAL и вызывает `fal_stp_port_state_set`, при необходимости настраивая slow-proto фильтрацию.
+- `nss_dp_stp_state_set(nss_dp_dev *, u8)` — перед выставлением состояния (и вызовом `fal_stp_port_state_set`) пишет `fix-wan-stp: setting STP state …`, чтобы видно было, какие команды на самом деле приходят в PPE.
 - `nss_dp_attr_get` / `nss_dp_attr_set` — реализации `switchdev_ops` для старых ядер: выдают parent ID, bridge flags и применяют STP state (с защитой VLAN).
 - `nss_dp_switchdev_ops`, `nss_dp_switchdev_setup` (старый путь) — вешают switchdev ops на netdev.
 - `nss_dp_port_attr_set`, `nss_dp_switchdev_port_attr_set_event` и `nss_dp_switchdev_event` — основной путь для новых ядер: обрабатывают события `SWITCHDEV_PORT_ATTR_SET` (BRIDGE_FLAGS, ageing time, STP state) и оповещают через notifier.

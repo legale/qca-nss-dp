@@ -194,6 +194,8 @@ static int nss_dp_stp_state_set(struct nss_dp_dev *dp_priv, u8 state)
 	sw_error_t err;
 	fal_stp_state_t stp_state;
 
+	netdev_info(dp_priv->netdev, "fix-wan-stp: setting STP state %u\n", state);
+
 	switch (state) {
 	case BR_STATE_DISABLED:
 		stp_state = FAL_STP_DISABLED;
