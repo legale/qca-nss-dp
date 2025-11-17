@@ -1280,6 +1280,7 @@ static void __exit nss_dp_exit(void)
 	 * Ensure netdev remove is done before HAL cleanup.
 	 */
 	platform_driver_unregister(&nss_dp_drv);
+	unregister_netdevice_notifier(&nss_dp_netdev_notifier);
 
 	if (dp_global_ctx.common_init_done) {
 		nss_dp_hal_cleanup();

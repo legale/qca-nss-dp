@@ -44,11 +44,14 @@ static bool switch_init_done;
 static int nss_dp_bridge_attr_set(struct net_device *dev,
 				const struct switchdev_attr *attr);
 
+static int nss_dp_stp_state_set(struct nss_dp_dev *dp_priv, u8 state);
+
 static int nss_dp_netdev_event(struct notifier_block *unused,
 			       unsigned long event, void *ptr)
 {
 	struct netdev_notifier_changeupper_info *info = ptr;
 	struct net_device *dev = netdev_notifier_info_to_dev(ptr);
+	struct net_device *upper = NULL;
 	struct nss_dp_dev *dp_priv;
 
 	if (event != NETDEV_CHANGEUPPER)
@@ -59,10 +62,18 @@ static int nss_dp_netdev_event(struct notifier_block *unused,
 		return NOTIFY_DONE;
 	}
 
-	netdev_info(dev, "fix-wan-stp netdev event %lu linking=%d upper=%s master=%s\n",
+	rcu_read_lock();
+	upper = netdev_master_upper_dev_get_rcu(dev);
+	if (upper)
+		dev_hold(upper);
+	rcu_read_unlock();
+
+	netdev_info(dev, "fix-wan-stp netdev event %lu linking=%d upper=%s\n",
 		    event, info ? info->linking : -1,
-		    info && info->upper_dev ? info->upper_dev->name : "<none>",
-		    dev->master ? dev->master->name : "<none>");
+		    upper ? upper->name : "<none>");
+
+	if (upper)
+		dev_put(upper);
 
 	if (info && info->linking)
 		return NOTIFY_DONE;
