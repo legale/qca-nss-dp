@@ -30,7 +30,7 @@
 - `nss_dp_nsm_sawf_sc_stats_read(struct nss_dp_hal_nsm_sawf_sc_stats *, u8)` — обёртка вокруг HAL для считывания NSM SAWF статистик по service class.
 - `nss_dp_init(void)` — init-модуль: обнуляет глобальный контекст, применяет модульные параметры, вызывает `nss_dp_hal_init()` и регистрирует platform-драйвер.
 - `nss_dp_exit(void)` — exit-модуль: дерегистрирует платформенный драйвер и чистит HAL, если init выполнялся.
-- `nss_dp_init(void)` (лог) — помимо стандартной инициализации выводит `nss-dp fix-wan-stp build 435f45d marker activated`, затем `nss-dp (fix-wan-stp build 435f45d) module initialized` и `nss-dp: STP bridge guard enabled (marker: fix-wan-stp build 2738045)`, чтобы было невозможно пропустить наш модуль в `dmesg` (`nss_dp_main.c:1174-1271`).
+- `nss_dp_init(void)` (лог) — помимо стандартной инициализации выводит `nss-dp fix-kernel-port-sync build 435f45d marker activated`, затем `nss-dp (fix-kernel-port-sync build 435f45d) module initialized` и `nss-dp: STP port sync enabled (marker: fix-kernel-port-sync build 2738045)`, чтобы было невозможно пропустить наш модуль в `dmesg` (`nss_dp_main.c:1174-1271`).
 - `nss_dp_init(void)` — регистрирует `nss_dp_netdev_notifier` через `register_netdevice_notifier` и логирует ошибки, если регистрация не удалась; это дает трассировку почти сразу на этапе загрузки и позволяет ловить `NETDEV_CHANGEUPPER` даже до создания netdev’ов (`nss_dp_main.c:1174-1285`).
 - Кроме функций, файл определяет структуру `nss_dp_netdev_ops`, глобальные параметры (`page_mode`, `jumbo_mru`, budgets, mitigation timers и т.п.) и вспомогательные сущности (mdio data, контексты).
 
@@ -96,14 +96,14 @@
 **Функции:**
 - `nss_dp_set_slow_proto_filter(nss_dp_dev *, bool)` — программирует PPE ctrlpkt профили, чтобы пропускать STP/LACP slow protocols на отключённых портовых состояниях, отслеживая bitmap активных портов.
 - `nss_dp_stp_state_set(nss_dp_dev *, u8)` — переводит STP состояние bridge-порта в эквивалент FAL и вызывает `fal_stp_port_state_set`, при необходимости настраивая slow-proto фильтрацию.
-- `nss_dp_stp_state_set(nss_dp_dev *, u8)` — перед выставлением состояния (и вызовом `fal_stp_port_state_set`) пишет `fix-wan-stp: setting STP state …`, чтобы видно было, какие команды на самом деле приходят в PPE.
+- `nss_dp_stp_state_set(nss_dp_dev *, u8)` — перед выставлением состояния (и вызовом `fal_stp_port_state_set`) пишет `fix-kernel-port-sync: setting STP state …`, чтобы видно было, какие команды на самом деле приходят в PPE.
 - `nss_dp_attr_get` / `nss_dp_attr_set` — реализации `switchdev_ops` для старых ядер: выдают parent ID, bridge flags и применяют STP state (с защитой VLAN).
 - `nss_dp_switchdev_ops`, `nss_dp_switchdev_setup` (старый путь) — вешают switchdev ops на netdev.
 - `nss_dp_port_attr_set`, `nss_dp_switchdev_port_attr_set_event` и `nss_dp_switchdev_event` — основной путь для новых ядер: обрабатывают события `SWITCHDEV_PORT_ATTR_SET` (BRIDGE_FLAGS, ageing time, STP state) и оповещают через notifier.
 - `nss_dp_bridge_attr_set` (варианты) — при включённом `NSS_DP_SW_BR_OPS` делегирует настройку ageing time и learning в PPE driver; если не поддерживается, возвращает успех без действий.
 - `nss_dp_fdb_event` / `nss_dp_switchdev_event_nb` — обслуживают добавление/удаление статических FDB записей через PPE driver (EDMA v2) либо удаление записей (EDMA v1).
 - `nss_dp_switchdev_cleanup` / новая версия `nss_dp_switchdev_setup` — регистрируют/дерегистрируют blocking и non-blocking notifier-ы только один раз (`switch_init_done`).
-- `nss_dp_netdev_event` — netdevice-notifier, реагирует на `NETDEV_CHANGEUPPER` без `linking`, повторно переводит порт в `BR_STATE_FORWARDING` и пишет `fix-wan-stp: upper removed, forcing forwarding`, чтобы аппарат не оставался в disabled после удаления из моста. Регистрируется через `register_netdevice_notifier`/`unregister_netdevice_notifier` вместе с `switchdev`-notifier-ами (`nss_dp_switchdev.c`).
+- `nss_dp_netdev_event` — netdevice-notifier, реагирует на `NETDEV_CHANGEUPPER` без `linking`, повторно переводит порт в `BR_STATE_FORWARDING` и пишет `fix-kernel-port-sync: upper removed, forcing forwarding`, чтобы аппарат не оставался в disabled после удаления из моста. Регистрируется через `register_netdevice_notifier`/`unregister_netdevice_notifier` вместе с `switchdev`-notifier-ами (`nss_dp_switchdev.c`).
 - `nss_dp_is_bridge_port(net_device *)` — helper возвращает, есть ли у netdev мастера-bridge и пишет `netdev_dbg`, если порт уже не подключён к мосту.
 - `nss_dp_attr_set(...)` и `nss_dp_port_attr_set(...)` — перед `nss_dp_stp_state_set()` проверяют `nss_dp_is_bridge_port()`; когда порт уже отвязали от моста, они пишут `netdev_info` (`Skip STP state …`) и игнорируют дальнейшие STP-события, чтобы PPE/FAL не переводил порт в `FAL_STP_DISABLED`.
 
