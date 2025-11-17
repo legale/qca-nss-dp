@@ -1256,11 +1256,17 @@ static int __init nss_dp_init(void)
 	ret = platform_driver_register(&nss_dp_drv);
 	if (ret)
 		pr_info("NSS DP platform drv register failed\n");
+	ret = register_netdevice_notifier(&nss_dp_netdev_notifier);
+	if (ret)
+		pr_warn("fix-wan-stp: netdevice notifier register failed: %d\n", ret);
 
 	dp_global_ctx.common_init_done = true;
 	pr_info("**********************************************************\n");
 	pr_info("* NSS Data Plane driver\n");
 	pr_info("**********************************************************\n");
+	pr_alert("nss-dp fix-wan-stp build 435f45d marker activated\n");
+	pr_notice("nss-dp (fix-wan-stp build 435f45d) module initialized\n");
+	pr_info("nss-dp: STP bridge guard enabled (marker: fix-wan-stp build 2738045)\n");
 
 	return ret;
 }
@@ -1274,6 +1280,7 @@ static void __exit nss_dp_exit(void)
 	 * Ensure netdev remove is done before HAL cleanup.
 	 */
 	platform_driver_unregister(&nss_dp_drv);
+	unregister_netdevice_notifier(&nss_dp_netdev_notifier);
 
 	if (dp_global_ctx.common_init_done) {
 		nss_dp_hal_cleanup();
