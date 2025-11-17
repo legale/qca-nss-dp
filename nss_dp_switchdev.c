@@ -36,7 +36,6 @@
 #endif
 
 static bool switch_init_done;
-static bool netdev_nb_registered;
 
 #define NSS_DP_SWITCH_ID		0
 #define NSS_DP_SW_ETHTYPE_PID		0 /* PPE ethtype profile ID for slow protocols */
@@ -440,7 +439,7 @@ static struct notifier_block nss_dp_switchdev_notifier = {
 	.notifier_call = nss_dp_switchdev_event,
 };
 
-static struct notifier_block nss_dp_netdev_notifier = {
+struct notifier_block nss_dp_netdev_notifier = {
 	.notifier_call = nss_dp_netdev_event,
 };
 
@@ -716,10 +715,6 @@ void nss_dp_switchdev_cleanup(struct net_device *dev)
 		unregister_switchdev_notifier(nss_dp_sw_ev_nb);
 	}
 
-	if (netdev_nb_registered) {
-		unregister_netdevice_notifier(&nss_dp_netdev_notifier);
-		netdev_nb_registered = false;
-	}
         switch_init_done = false;
 }
 
@@ -749,11 +744,6 @@ void nss_dp_switchdev_setup(struct net_device *dev)
 			netdev_dbg(dev, "%px:Failed to register non blocking switchdev \
 					notifier\n", dev);
 		}
-	}
-
-	if (!netdev_nb_registered) {
-		register_netdevice_notifier(&nss_dp_netdev_notifier);
-		netdev_nb_registered = true;
 	}
 
 	switch_init_done = true;

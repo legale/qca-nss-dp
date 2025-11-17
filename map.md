@@ -31,6 +31,7 @@
 - `nss_dp_init(void)` — init-модуль: обнуляет глобальный контекст, применяет модульные параметры, вызывает `nss_dp_hal_init()` и регистрирует platform-драйвер.
 - `nss_dp_exit(void)` — exit-модуль: дерегистрирует платформенный драйвер и чистит HAL, если init выполнялся.
 - `nss_dp_init(void)` (лог) — помимо стандартной инициализации выводит `nss-dp fix-wan-stp build 435f45d marker activated`, затем `nss-dp (fix-wan-stp build 435f45d) module initialized` и `nss-dp: STP bridge guard enabled (marker: fix-wan-stp build 2738045)`, чтобы было невозможно пропустить наш модуль в `dmesg` (`nss_dp_main.c:1174-1271`).
+- `nss_dp_init(void)` — регистрирует `nss_dp_netdev_notifier` через `register_netdevice_notifier` и логирует ошибки, если регистрация не удалась; это дает трассировку почти сразу на этапе загрузки и позволяет ловить `NETDEV_CHANGEUPPER` даже до создания netdev’ов (`nss_dp_main.c:1174-1285`).
 - Кроме функций, файл определяет структуру `nss_dp_netdev_ops`, глобальные параметры (`page_mode`, `jumbo_mru`, budgets, mitigation timers и т.п.) и вспомогательные сущности (mdio data, контексты).
 
 ## nss_dp_attach.c
