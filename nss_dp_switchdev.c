@@ -49,6 +49,8 @@ static int nss_dp_bridge_attr_set(struct net_device *dev,
  */
 static int nss_dp_stp_state_set(struct nss_dp_dev *dp_priv, u8 state);
 
+static int nss_dp_stp_state_set(struct nss_dp_dev *dp_priv, u8 state);
+
 static int nss_dp_netdev_event(struct notifier_block *unused,
 			       unsigned long event, void *ptr)
 {
