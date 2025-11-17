@@ -115,3 +115,12 @@
 - `nss_dp_vp_rx_register_cb(nss_dp_vp_rx_cb_t, nss_dp_vp_list_rx_cb_t)` / `nss_dp_vp_rx_unregister_cb()` — регистрируют/удаляют Rx callbacks (индивидуальные и списковые) с синхронизацией RCU.
 - `nss_dp_vp_init(void)` — выделяет и настраивает отдельный `net_device` (macid `NSS_DP_VP_MAC_ID`), цепляет dataplane ops через HAL, вызывает `init/open` dataplane без использования GMAC HAL и добавляет порт в глобальный массив.
 - `nss_dp_vp_deinit(net_device *)` — освобождает виртуальный netdev (dataplane остановкой занимается вызывающий код перед тем, как вызвать deinit).
+
+## Архитектура nss-dp
+**Назначение:** объяснить, как `nss-dp` выступает связующим звеном между netlink/netdev API Linux и Qualcomm NSS/PPE/SSDK API.
+
+**Описание:**
+- `nss_dp_main.c` и сопутствующие файлы создают `net_device`, связывают `netdev_ops`, `ethtool_ops` и `switchdev_ops`, управляют PHY и DMA; таким образом каждый порт NSS выглядит как обычный сетевой интерфейс для ядра.
+- Все состыковки отрабатываются через NSS API: HAL-функции (`nss_dp_hal_*`), EDMA-dataplane (`nss_dp_data_plane_ops`), а также `fal_*` и `ppe_drv_*` из SSDK/PPE — именно они реально настраивают switch, STP, mirror, flow steering и statistics.
+- Switchdev/netdev callbacks (`nss_dp_stp_state_set`, `nss_dp_attr_set`, `nss_dp_netdev_event` и т.п.) переводят netlink-команды (bridge flags, STP state, mirroring, VLAN, netdev добавление/удаление) в QCA-вызовы, получая ответы от escроу-API и отдавая статусы обратно в Linux.  
+- Таким образом `nss-dp` и есть «мост»: netlink/switchdev/ethtool → `nss_dp_*` → HAL/FAL/PPE → NSS dataplane, передавая трафик и статистику между kernel и софтом Qualcomm.
