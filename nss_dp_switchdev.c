@@ -111,26 +111,6 @@ static bool nss_dp_is_bridge_port(struct net_device *dev)
 	bool is_bridge = br_dev != NULL;
 
 	if (!is_bridge)
-		netdev_dbg(dev, "device=%s no longer enslaved to bridge\n", dev->name);
-
-	return is_bridge;
-}
-
-/*
- * nss_dp_is_bridge_port()
- *	Returns true if port is currently enslaved to a bridge/master.
- */
-static bool nss_dp_is_bridge_port(struct net_device *dev)
-{
-	struct net_device *br_dev;
-
-	rcu_read_lock();
-	br_dev = netdev_master_upper_dev_get_rcu(dev);
-	rcu_read_unlock();
-
-	bool is_bridge = br_dev != NULL;
-
-	if (!is_bridge)
 		netdev_dbg(dev, "%s: device no longer enslaved to bridge\n", dev->name);
 
 	return is_bridge;
