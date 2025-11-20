@@ -1264,7 +1264,6 @@ static int __init nss_dp_init(void)
 	pr_info("**********************************************************\n");
 	pr_info("* NSS Data Plane driver\n");
 	pr_info("**********************************************************\n");
-	pr_alert("patch fix-kernel-port-sync\n");
 
 	return ret;
 }

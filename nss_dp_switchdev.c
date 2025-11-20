@@ -58,6 +58,8 @@ static int nss_dp_netdev_event(struct notifier_block *unused,
 	struct net_device *dev = netdev_notifier_info_to_dev(ptr);
 	struct net_device *master = NULL;
 	struct nss_dp_dev *dp_priv;
+	sw_error_t err;
+	fal_stp_state_t stp_state;
 
 	if (event != NETDEV_CHANGEUPPER)
 		return NOTIFY_DONE;
@@ -90,7 +92,13 @@ static int nss_dp_netdev_event(struct notifier_block *unused,
 	if (!dp_priv)
 		return NOTIFY_DONE;
 
-	netdev_info(dev, "master removed -> forcing forwarding fal state=%d FAL_STP_FORWARDING\n", FAL_STP_FORWARDING);
+	err = fal_stp_port_state_get(NSS_DP_SWITCH_ID, 0, dp_priv->macid, &stp_state);
+	if (!err)
+		netdev_info(dev, "current fal stp state=%d\n", stp_state);
+	else
+		netdev_warn(dev, "failed to get fal stp state err=%d %pe\n", err, ERR_PTR(err));
+
+	netdev_info(dev, "master removed -> forcing forwarding fal stp state=%d FAL_STP_FORWARDING\n", FAL_STP_FORWARDING);
 	nss_dp_stp_state_set(dp_priv, BR_STATE_FORWARDING);
 
 	return NOTIFY_DONE;
