@@ -73,7 +73,7 @@ static int nss_dp_netdev_event(struct notifier_block *unused,
 		dev_hold(master);
 	rcu_read_unlock();
 
-	netdev_info(dev, "netdev event %lu linking=%d master=%s\n",
+	netdev_info(dev, "netdev event=%lu linking=%d master=%s\n",
 		    event, info ? info->linking : -1,
 		    master ? master->name : "nomaster");
 
@@ -90,7 +90,7 @@ static int nss_dp_netdev_event(struct notifier_block *unused,
 	if (!dp_priv)
 		return NOTIFY_DONE;
 
-	netdev_info(dev, "upper removed -> forcing forwarding\n");
+	netdev_info(dev, "master removed -> forcing forwarding fal state=%d FAL_STP_FORWARDING\n", FAL_STP_FORWARDING);
 	nss_dp_stp_state_set(dp_priv, BR_STATE_FORWARDING);
 
 	return NOTIFY_DONE;
@@ -111,7 +111,7 @@ static bool nss_dp_is_bridge_port(struct net_device *dev)
 	bool is_bridge = br_dev != NULL;
 
 	if (!is_bridge)
-		netdev_dbg(dev, "%s: device no longer enslaved to bridge\n", dev->name);
+		netdev_dbg(dev, "device=%s no longer enslaved to bridge\n", dev->name);
 
 	return is_bridge;
 }
